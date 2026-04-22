@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { useTrackStore, type Stem } from '../../store/useTrackStore'
 
@@ -8,29 +8,21 @@ type Props = {
   wsRef: React.MutableRefObject<WaveSurfer | null>
 }
 
-function extractPeaks(buf: AudioBuffer): Float32Array[] {
-  const peaks: Float32Array[] = []
-  for (let c = 0; c < buf.numberOfChannels; c++) {
-    peaks.push(buf.getChannelData(c))
-  }
-  return peaks
-}
-
 export function Waveform({ stem, audioBuffer, wsRef }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const loadedRef = useRef(false)
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
+  const [ws, setWs] = useState<WaveSurfer | null>(null)
+
   const zoomH = useTrackStore((s) => s.zoomH)
   const setPlayheadTime = useTrackStore((s) => s.setPlayheadTime)
   const setPlaying = useTrackStore((s) => s.setPlaying)
   const updateStem = useTrackStore((s) => s.updateStem)
 
-  // Create WaveSurfer once
+  // Create WaveSurfer when container is ready
   useEffect(() => {
-    if (!containerRef.current) return
-    loadedRef.current = false
+    if (!container) return
 
-    const ws = WaveSurfer.create({
-      container: containerRef.current,
+    const instance = WaveSurfer.create({
+      container,
       waveColor: stem.color + '99',
       progressColor: stem.color,
       cursorColor: '#ffffff40',
@@ -41,42 +33,53 @@ export function Waveform({ stem, audioBuffer, wsRef }: Props) {
       barGap: 1,
       barRadius: 2,
       interact: true,
-      backend: 'MediaElement',   // avoids a second WebAudio decode
     })
 
-    wsRef.current = ws
+    wsRef.current = instance
+    setWs(instance)
 
-    ws.on('ready', () => {
-      updateStem(stem.id, { duration: ws.getDuration() })
-      ws.zoom(zoomH * 20)
-    })
-    ws.on('timeupdate', (t) => setPlayheadTime(t))
-    ws.on('play',   () => setPlaying(true))
-    ws.on('pause',  () => setPlaying(false))
-    ws.on('finish', () => setPlaying(false))
+    instance.on('timeupdate', (t) => setPlayheadTime(t))
+    instance.on('play',   () => setPlaying(true))
+    instance.on('pause',  () => setPlaying(false))
+    instance.on('finish', () => setPlaying(false))
 
-    return () => { ws.destroy(); wsRef.current = null; loadedRef.current = false }
+    return () => {
+      instance.destroy()
+      wsRef.current = null
+      setWs(null)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stem.id])
+  }, [container, stem.id])
 
-  // Load once we have the decoded buffer — pass peaks so WaveSurfer renders
-  // the waveform immediately without its own decode pass
+  // Load audio once both WaveSurfer instance and decoded buffer are ready.
+  // Using `ws` (state) as a dep means this re-runs correctly after StrictMode
+  // double-mounts, when a new instance replaces the destroyed one.
   useEffect(() => {
-    if (!wsRef.current || !audioBuffer || !stem.file || loadedRef.current) return
-    loadedRef.current = true
-    const peaks = extractPeaks(audioBuffer)
-    wsRef.current
-      .loadBlob(stem.file, peaks, audioBuffer.duration)
-      .catch((err: unknown) => console.error('WaveSurfer loadBlob error:', err))
-  }, [audioBuffer, stem.file, wsRef])
+    if (!ws || !audioBuffer || !stem.file) return
 
+    const peaks: Float32Array[] = []
+    for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+      peaks.push(audioBuffer.getChannelData(c))
+    }
+
+    ws.loadBlob(stem.file, peaks, audioBuffer.duration)
+      .then(() => {
+        updateStem(stem.id, { duration: audioBuffer.duration })
+        ws.zoom(zoomH * 20)
+      })
+      .catch((err: unknown) => console.error('WaveSurfer load error:', err))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws, audioBuffer])
+
+  // Zoom when slider changes, only after audio is loaded
   useEffect(() => {
-    wsRef.current?.zoom(zoomH * 20)
-  }, [zoomH, wsRef])
+    if (!ws) return
+    try { ws.zoom(zoomH * 20) } catch { /* not loaded yet */ }
+  }, [ws, zoomH])
 
   return (
     <div className="relative min-h-[80px]">
-      <div ref={containerRef} className="wavesurfer-wrapper" />
+      <div ref={setContainer} />
     </div>
   )
 }
