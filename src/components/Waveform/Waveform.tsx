@@ -147,13 +147,8 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
         ws.zoom(pps)
         setCurrentPps(pps)
         setContainerWidth(w)
-        // Capture scroll wrapper and hide its native scrollbar
-        const sw = ws.getWrapper() ?? null
-        scrollWrapperRef.current = sw
-        if (sw) {
-          sw.classList.add('ws-no-scroll')
-          ;(sw.style as unknown as Record<string,string>).scrollbarWidth = 'none'
-        }
+        // Capture scroll wrapper for programmatic scroll sync
+        scrollWrapperRef.current = ws.getWrapper() ?? null
       })
       .catch((err: unknown) => console.error('WaveSurfer load error:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +174,7 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   }, [scrollStartTime, currentPps])
 
   return (
-    <div className="relative">
+    <div className="relative ws-host">
       <div ref={setContainer} />
     </div>
   )

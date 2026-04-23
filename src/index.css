@@ -30,9 +30,9 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: #71717a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #d4d4d8; }
 
-/* Hide WaveSurfer's internal scroll thumbs (class added via JS after load) */
-.ws-no-scroll::-webkit-scrollbar { display: none !important; }
-.ws-no-scroll { scrollbar-width: none !important; }
+/* Hide scrollbars on everything inside WaveSurfer containers */
+.ws-host *::-webkit-scrollbar { display: none !important; }
+.ws-host * { scrollbar-width: none !important; }
 
 /* Single custom scrollbar above stems */
 .tracklab-scrollbar::-webkit-scrollbar { height: 8px; }
