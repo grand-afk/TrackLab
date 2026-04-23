@@ -5,10 +5,17 @@ import { useTrackStore } from '../store/useTrackStore'
 type Handler = () => void
 type ActionMap = Partial<Record<string, Handler>>
 
+// tinykeys requires full modifier names for getModifierState() — normalize persisted lowercase values
+function normShortcut(key: string): string {
+  return key
+    .replace(/\bctrl\b/gi, 'Control')
+    .replace(/\bshift\b/gi, 'Shift')
+    .replace(/\balt\b/gi, 'Alt')
+    .replace(/\bmeta\b/gi, 'Meta')
+}
+
 export function useKeyBindings(actions: ActionMap) {
   const shortcuts = useTrackStore((s) => s.settings.shortcuts)
-  // Keep a ref to the latest actions so tinykeys callbacks always call the current handler
-  // without the effect needing to re-run (and re-register tinykeys) on every render.
   const actionsRef = useRef(actions)
   actionsRef.current = actions
 
@@ -16,11 +23,11 @@ export function useKeyBindings(actions: ActionMap) {
     const bindings: Record<string, (e: KeyboardEvent) => void> = {}
     for (const action of Object.keys(actionsRef.current)) {
       const key = shortcuts[action]
-      if (key) bindings[key] = (e: KeyboardEvent) => {
+      if (key) bindings[normShortcut(key)] = (e: KeyboardEvent) => {
         e.preventDefault()
         actionsRef.current[action]?.()
       }
     }
     return tinykeys(window, bindings)
-  }, [shortcuts]) // only re-register when shortcuts config changes, not on every render
+  }, [shortcuts])
 }

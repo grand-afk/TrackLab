@@ -77,6 +77,7 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
       barGap: 1,
       barRadius: 2,
       interact: true,
+      hideScrollbar: true,
       plugins,
     })
 
@@ -104,8 +105,6 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
         })
       }
     })
-
-    // scrollbar hidden via CSS [part="scroll"] selector in index.css
 
     // Track container width via ResizeObserver
     const ro = new ResizeObserver((entries) => {
@@ -148,7 +147,8 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
         setCurrentPps(pps)
         setContainerWidth(w)
         // Capture scroll wrapper for programmatic scroll sync
-        scrollWrapperRef.current = ws.getWrapper() ?? null
+        // getWrapper() returns the inner .wrapper div; its parent is the .scroll container
+        scrollWrapperRef.current = (ws.getWrapper().parentElement as HTMLElement) ?? null
       })
       .catch((err: unknown) => console.error('WaveSurfer load error:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps

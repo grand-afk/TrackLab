@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useTrackStore } from '../../store/useTrackStore'
 import type { SkipUnit } from '../../store/useTrackStore'
@@ -39,12 +39,15 @@ export function Settings({ open, onClose }: Props) {
   const updateSettings   = useTrackStore((s) => s.updateSettings)
   const updateSkipSettings = useTrackStore((s) => s.updateSkipSettings)
   const [editing, setEditing] = useState<string | null>(null)
+  const editingRef = useRef<string | null>(null)
+  editingRef.current = editing
 
-  // Close on Escape
+  // Close on Escape — but not while capturing a new shortcut
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === 'Delete') { e.preventDefault(); onClose() }
+      if (editingRef.current) return
+      if (e.key === 'Escape') { e.preventDefault(); onClose() }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -57,9 +60,9 @@ export function Settings({ open, onClose }: Props) {
     const isModifier = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)
     if (isModifier) return  // wait for the actual key
     const parts: string[] = []
-    if (e.ctrlKey || e.metaKey) parts.push('ctrl')
-    if (e.shiftKey) parts.push('shift')
-    if (e.altKey)   parts.push('alt')
+    if (e.ctrlKey || e.metaKey) parts.push('Control')
+    if (e.shiftKey) parts.push('Shift')
+    if (e.altKey)   parts.push('Alt')
     const key = e.key === ' ' ? 'Space' : e.key
     parts.push(key)
     updateSettings({ shortcuts: { ...shortcuts, [action]: parts.join('+') } })
