@@ -17,7 +17,7 @@ type Props = {
 }
 
 export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
-  const [showSpec, setShowSpec] = useState(false)
+  const [showSpec, setShowSpec] = useState(true)
   const updateStem   = useTrackStore((s) => s.updateStem)
   const removeStem   = useTrackStore((s) => s.removeStem)
   const bpmOverride  = useTrackStore((s) => s.bpmOverride)

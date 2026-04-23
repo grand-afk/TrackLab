@@ -4,6 +4,7 @@ import { Settings2, Download } from 'lucide-react'
 import { DropZone } from './components/DropZone/DropZone'
 import { StemRow } from './components/Waveform/StemRow'
 import { Transport } from './components/Transport/Transport'
+import { MarkerPanel } from './components/Markers/MarkerPanel'
 import { Settings } from './components/Settings/Settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTrackStore, MARKER_COLORS } from './store/useTrackStore'
@@ -26,12 +27,16 @@ export default function App() {
   const setPlaying          = useTrackStore((s) => s.setPlaying)
   const setPlayheadTime     = useTrackStore((s) => s.setPlayheadTime)
   const annotations         = useTrackStore((s) => s.annotations)
+  const cueMarkers          = useTrackStore((s) => s.cueMarkers)
   const addCueMarker        = useTrackStore((s) => s.addCueMarker)
   const updateCueMarker     = useTrackStore((s) => s.updateCueMarker)
   const removeCueMarker     = useTrackStore((s) => s.removeCueMarker)
+  const clearCueMarkers     = useTrackStore((s) => s.clearCueMarkers)
   const setSelectedMarkerId = useTrackStore((s) => s.setSelectedMarkerId)
   const zoomH               = useTrackStore((s) => s.zoomH)
   const setZoomH            = useTrackStore((s) => s.setZoomH)
+
+  const [markerPanelEditingId, setMarkerPanelEditingId] = useState<string | null>(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [error, setError]               = useState<string | null>(null)
@@ -89,6 +94,13 @@ export default function App() {
     setPlaying(false); setPlayheadTime(0)
   }
 
+  function handleSkip(fine: boolean, direction: 1 | -1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skipSecs: number = (useTrackStore.getState() as any).getSkipSeconds(fine)
+    const t = Math.max(0, Math.min(longestDuration, useTrackStore.getState().playheadTime + skipSecs * direction))
+    seekAll(t)
+  }
+
   async function doExport() {
     await triggerExport(exportMarkdown(stems, annotations),
       `tracklab-${new Date().toISOString().split('T')[0]}.md`)
@@ -126,27 +138,45 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Arrow keys: nudge selected marker or skip 5s
+  // Arrow keys: nudge selected marker OR skip forward/back
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return
       const { selectedMarkerId } = useTrackStore.getState()
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const dir = e.key === 'ArrowLeft' ? -1 : 1
         if (selectedMarkerId) {
           e.preventDefault()
-          const fine = e.shiftKey
-          const delta = (e.key === 'ArrowLeft' ? -1 : 1) * (fine ? 0.01 : 0.1)
+          const delta = dir * (e.shiftKey ? 0.01 : 0.1)
           nudgeMarker(delta)
+        } else {
+          e.preventDefault()
+          handleSkip(e.shiftKey, dir as 1 | -1)
         }
-        // When no marker selected, transport skip is handled by tinykeys
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedMarkerId) {
         e.preventDefault()
         removeCueMarker(selectedMarkerId)
         setSelectedMarkerId(null)
       }
-      if (e.key === 'Enter' && selectedMarkerId) {
-        // Label editing is triggered by double-click on the marker badge
+      // Ctrl+1–0 jump to marker; Ctrl+Alt+1–0 jump to marker 11–20
+      if (e.ctrlKey && !e.shiftKey) {
+        const num = KEY_MAP[e.key]
+        if (num !== undefined) {
+          e.preventDefault()
+          const targetNum = e.altKey ? num + 10 : num
+          const { cueMarkers: markers } = useTrackStore.getState()
+          const m = markers.find((c) => c.number === targetNum)
+          if (m) seekAll(m.time)
+        }
+      }
+      // F2: edit label of selected marker
+      if (e.key === 'F2') {
+        e.preventDefault()
+        const { selectedMarkerId: sid } = useTrackStore.getState()
+        if (sid) {
+          ;(window as Window & { __tlFocusLabel?: (id: string) => void }).__tlFocusLabel?.(sid)
+        }
       }
     }
     window.addEventListener('keydown', handler)
@@ -158,14 +188,15 @@ export default function App() {
   const analysing = stems.some((s) => audioBuffers.has(s.id) && s.bpm === null)
 
   useKeyBindings({
-    'play-pause': () => useTrackStore.getState().isPlaying ? pauseAll() : playAll(),
-    'stop':       stopAll,
-    'skip-start': () => seekAll(0),
-    'zoom-in':    () => setZoomH(zoomH + 0.5),
-    'zoom-out':   () => setZoomH(zoomH - 0.5),
-    'goto':       () => window.dispatchEvent(new Event('tracklab:goto')),
-    'settings':   () => setSettingsOpen(true),
-    'export':     doExport,
+    'play-pause':    () => useTrackStore.getState().isPlaying ? pauseAll() : playAll(),
+    'stop':          stopAll,
+    'skip-start':    () => seekAll(0),
+    'zoom-in':       () => setZoomH(zoomH + 0.5),
+    'zoom-out':      () => setZoomH(zoomH - 0.5),
+    'goto':          () => window.dispatchEvent(new Event('tracklab:goto')),
+    'settings':      () => setSettingsOpen(true),
+    'export':        doExport,
+    'clear-markers': clearCueMarkers,
   })
 
   return (
@@ -201,7 +232,7 @@ export default function App() {
       {stems.length > 0 && (
         <Transport
           onPlay={playAll} onPause={pauseAll} onStop={stopAll}
-          onSeek={seekAll} duration={longestDuration}
+          onSeek={seekAll} onSkip={handleSkip} duration={longestDuration}
           onAddFile={() => addInputRef.current?.click()}
         />
       )}
@@ -223,15 +254,26 @@ export default function App() {
             </p>
           </div>
         ) : (
-          <ErrorBoundary fallback={(e) => (
-            <div className="p-6 text-sm text-red-400 font-mono">Render error: {e.message}</div>
-          )}>
-            {stems.map((stem, i) => (
-              <StemRow key={stem.id} stem={stem}
-                audioBuffer={audioBuffers.get(stem.id) ?? null}
-                wsRef={getWsRef(stem.id)} isFirst={i === 0} />
-            ))}
-          </ErrorBoundary>
+          <>
+            <ErrorBoundary fallback={(e) => (
+              <div className="p-6 text-sm text-red-400 font-mono">Render error: {e.message}</div>
+            )}>
+              {stems.map((stem, i) => (
+                <StemRow key={stem.id} stem={stem}
+                  audioBuffer={audioBuffers.get(stem.id) ?? null}
+                  wsRef={getWsRef(stem.id)} isFirst={i === 0} />
+              ))}
+            </ErrorBoundary>
+            {cueMarkers.length > 0 && (
+              <MarkerPanel
+                duration={longestDuration}
+                onSeek={seekAll}
+                onClearAll={clearCueMarkers}
+                editingId={markerPanelEditingId}
+                setEditingId={setMarkerPanelEditingId}
+              />
+            )}
+          </>
         )}
       </div>
 

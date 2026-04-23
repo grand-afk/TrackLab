@@ -22,12 +22,37 @@ export function CueMarkers({ duration }: Props) {
   // Visible time window
   const visibleEndTime = scrollStartTime + containerWidth / currentPps
 
+  // Compute stagger rows for visible markers to avoid label overlap
+  // Each row is 14px apart; we assign a row index based on pixel proximity
+  const BADGE_PX = 22  // badge width + gap
+  const visibleMarkers = cueMarkers.filter(
+    (m) => m.time >= scrollStartTime - 2 && m.time <= visibleEndTime + 2
+  )
+  const rowAssignment = new Map<string, number>()
+  for (const m of visibleMarkers) {
+    const px = (m.time - scrollStartTime) * currentPps
+    // Find the lowest row where no prior marker is within BADGE_PX
+    let row = 0
+    while (true) {
+      const conflict = visibleMarkers.find((other) => {
+        if (other.id === m.id) return false
+        if ((rowAssignment.get(other.id) ?? 0) !== row) return false
+        const otherPx = (other.time - scrollStartTime) * currentPps
+        return Math.abs(px - otherPx) < BADGE_PX
+      })
+      if (!conflict) break
+      row++
+    }
+    rowAssignment.set(m.id, row)
+  }
+
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 10 }}>
-      {cueMarkers.map((marker) => {
-        if (marker.time < scrollStartTime - 2 || marker.time > visibleEndTime + 2) return null
+      {visibleMarkers.map((marker) => {
         const left = (marker.time - scrollStartTime) * currentPps
         const isSelected = marker.id === selectedMarkerId
+        const labelRow = rowAssignment.get(marker.id) ?? 0
+        const labelTop = 28 + labelRow * 14  // px from top
 
         return (
           <div
@@ -53,15 +78,16 @@ export function CueMarkers({ duration }: Props) {
                 className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold text-zinc-900 shadow"
                 style={{ backgroundColor: marker.color }}
               >
-                {marker.number === 10 ? 0 : marker.number}
+                {marker.number === 10 ? 0 : marker.number > 10 ? marker.number - 10 : marker.number}
+                {marker.number > 10 && <span className="text-[7px] leading-none ml-0.5">A</span>}
               </div>
             </div>
 
-            {/* Label */}
+            {/* Label — staggered vertically */}
             {marker.label && (
               <div
-                className="absolute top-7 -translate-x-1/2 text-[10px] font-mono whitespace-nowrap px-1 rounded"
-                style={{ left: 1, color: marker.color, backgroundColor: '#09090b99' }}
+                className="absolute -translate-x-1/2 text-[10px] font-mono whitespace-nowrap px-1 rounded pointer-events-none"
+                style={{ left: 1, top: labelTop, color: marker.color, backgroundColor: '#09090b99' }}
               >
                 {marker.label}
               </div>

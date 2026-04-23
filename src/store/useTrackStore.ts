@@ -32,9 +32,18 @@ export type Annotation = {
 }
 
 export type BeatGridGranularity = '1' | '1/2' | '1/4' | '1/8' | '1/16'
+export type SkipUnit = 'seconds' | 'beats'
+
+export type SkipSettings = {
+  amount: number       // default 5
+  unit: SkipUnit       // default 'seconds'
+  fineAmount: number   // default 0.5
+  fineUnit: SkipUnit   // default 'seconds'
+}
 
 type Settings = {
   shortcuts: Record<string, string>
+  skip: SkipSettings
 }
 
 type TrackStore = {
@@ -44,12 +53,10 @@ type TrackStore = {
   annotations: Annotation[]
   playheadTime: number
   isPlaying: boolean
-  // Waveform zoom/scroll state (written by Waveform, read by BeatGrid)
   currentPps: number
   scrollStartTime: number
   containerWidth: number
-  zoomH: number           // kept for keyboard zoom shortcuts
-  zoomV: number
+  zoomH: number
   bpmOverride: number | null
   granularity: BeatGridGranularity
   settings: Settings
@@ -57,11 +64,11 @@ type TrackStore = {
   addStem: (stem: Stem) => void
   removeStem: (id: string) => void
   updateStem: (id: string, patch: Partial<Stem>) => void
-  clearStems: () => void
 
   addCueMarker: (marker: CueMarker) => void
   updateCueMarker: (id: string, patch: Partial<CueMarker>) => void
   removeCueMarker: (id: string) => void
+  clearCueMarkers: () => void
   setSelectedMarkerId: (id: string | null) => void
 
   addAnnotation: (ann: Annotation) => void
@@ -74,69 +81,64 @@ type TrackStore = {
   setScrollStartTime: (t: number) => void
   setContainerWidth: (w: number) => void
   setZoomH: (v: number) => void
-  setZoomV: (v: number) => void
   setBpmOverride: (v: number | null) => void
   setGranularity: (g: BeatGridGranularity) => void
   updateSettings: (patch: Partial<Settings>) => void
+  updateSkipSettings: (patch: Partial<SkipSettings>) => void
 }
 
-const STEM_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4']
+const STEM_COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4']
 
-const MARKER_COLORS = [
+export const MARKER_COLORS = [
   '#f59e0b','#ef4444','#10b981','#6366f1','#8b5cf6',
   '#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6',
   '#a78bfa','#fb923c','#34d399','#60a5fa','#f472b6',
   '#facc15','#4ade80','#38bdf8','#c084fc','#fb7185',
 ]
 
+const DEFAULT_SETTINGS: Settings = {
+  shortcuts: {
+    'play-pause':  'Space',
+    'stop':        'Escape',
+    'skip-start':  'Home',
+    'zoom-in':     '=',
+    'zoom-out':    '-',
+    'goto':        'g',
+    'settings':    'ctrl+comma',
+    'export':      'ctrl+e',
+    'clear-markers': 'ctrl+shift+Delete',
+    'edit-label':  'F2',
+  },
+  skip: {
+    amount: 5, unit: 'seconds',
+    fineAmount: 0.5, fineUnit: 'seconds',
+  },
+}
+
 export const useTrackStore = create<TrackStore>()(
   persist(
-    (set) => ({
-      stems: [],
-      cueMarkers: [],
-      selectedMarkerId: null,
-      annotations: [],
-      playheadTime: 0,
-      isPlaying: false,
-      currentPps: 0,
-      scrollStartTime: 0,
-      containerWidth: 0,
-      zoomH: 1,
-      zoomV: 1,
-      bpmOverride: null,
-      granularity: '1/4',
-      settings: {
-        shortcuts: {
-          'play-pause': 'Space',
-          'stop': 'Escape',
-          'zoom-in': '=',
-          'zoom-out': '-',
-          'skip-start': 'Home',
-          'skip-back': 'ArrowLeft',
-          'skip-forward': 'ArrowRight',
-          'goto': 'g',
-          'settings': 'ctrl+comma',
-          'export': 'ctrl+e',
-          'nudge-left': 'ArrowLeft',
-          'nudge-right': 'ArrowRight',
-        },
-      },
+    (set, get) => ({
+      stems: [], cueMarkers: [], selectedMarkerId: null, annotations: [],
+      playheadTime: 0, isPlaying: false,
+      currentPps: 0, scrollStartTime: 0, containerWidth: 0,
+      zoomH: 1, bpmOverride: null, granularity: '1/4',
+      settings: DEFAULT_SETTINGS,
 
       addStem: (stem) =>
-        set((s) => ({
-          stems: [...s.stems, { ...stem, color: STEM_COLORS[s.stems.length % STEM_COLORS.length] }],
-        })),
+        set((s) => ({ stems: [...s.stems, { ...stem, color: STEM_COLORS[s.stems.length % STEM_COLORS.length] }] })),
       removeStem: (id) => set((s) => ({ stems: s.stems.filter((t) => t.id !== id) })),
       updateStem: (id, patch) =>
         set((s) => ({ stems: s.stems.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
-      clearStems: () => set({ stems: [] }),
 
       addCueMarker: (marker) =>
-        set((s) => ({ cueMarkers: [...s.cueMarkers.filter((m) => m.number !== marker.number), marker] })),
+        set((s) => ({ cueMarkers: [...s.cueMarkers.filter((m) => m.number !== marker.number), marker]
+          .sort((a, b) => a.time - b.time) })),
       updateCueMarker: (id, patch) =>
-        set((s) => ({ cueMarkers: s.cueMarkers.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
+        set((s) => ({ cueMarkers: s.cueMarkers.map((m) => (m.id === id ? { ...m, ...patch } : m))
+          .sort((a, b) => a.time - b.time) })),
       removeCueMarker: (id) =>
         set((s) => ({ cueMarkers: s.cueMarkers.filter((m) => m.id !== id) })),
+      clearCueMarkers: () => set({ cueMarkers: [], selectedMarkerId: null }),
       setSelectedMarkerId: (id) => set({ selectedMarkerId: id }),
 
       addAnnotation: (ann) => set((s) => ({ annotations: [...s.annotations, ann] })),
@@ -151,11 +153,24 @@ export const useTrackStore = create<TrackStore>()(
       setScrollStartTime: (t) => set({ scrollStartTime: t }),
       setContainerWidth: (w) => set({ containerWidth: w }),
       setZoomH: (v) => set({ zoomH: Math.max(1, Math.min(50, v)) }),
-      setZoomV: (v) => set({ zoomV: Math.max(0.5, Math.min(4, v)) }),
       setBpmOverride: (v) => set({ bpmOverride: v }),
       setGranularity: (g) => set({ granularity: g }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-    }),
+      updateSkipSettings: (patch) =>
+        set((s) => ({ settings: { ...s.settings, skip: { ...s.settings.skip, ...patch } } })),
+
+      // Helper used by App for beat-aware skip
+      getSkipSeconds(fine: boolean): number {
+        const { settings, stems, bpmOverride } = get()
+        const sk = fine ? { amount: settings.skip.fineAmount, unit: settings.skip.fineUnit }
+                        : { amount: settings.skip.amount,     unit: settings.skip.unit }
+        if (sk.unit === 'beats') {
+          const bpm = bpmOverride ?? stems[0]?.bpm ?? 120
+          return (60 / bpm) * sk.amount
+        }
+        return sk.amount
+      },
+    } as TrackStore & { getSkipSeconds: (fine: boolean) => number }),
     {
       name: 'tracklab-store',
       partialize: (s) => ({
@@ -168,5 +183,3 @@ export const useTrackStore = create<TrackStore>()(
     }
   )
 )
-
-export { MARKER_COLORS }
