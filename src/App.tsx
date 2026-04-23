@@ -8,6 +8,7 @@ import { MarkerPanel } from './components/Markers/MarkerPanel'
 import { Settings } from './components/Settings/Settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTrackStore, MARKER_COLORS, getSkipSeconds } from './store/useTrackStore'
+import { WaveScrollBar } from './components/WaveScrollBar'
 import { useDecodeAudioFile } from './hooks/useAudioEngine'
 import { useKeyBindings } from './hooks/useKeyBindings'
 import { analyseAudio } from './lib/essentia'
@@ -16,7 +17,12 @@ import type { Stem } from './store/useTrackStore'
 
 const MAX_STEMS = 6
 
-// Keys 1-9,0 → marker numbers 1-10; Alt+same → 11-20
+// e.code values for digit row — stable regardless of Shift/Alt modifiers
+const CODE_MAP: Record<string, number> = {
+  'Digit1':1,'Digit2':2,'Digit3':3,'Digit4':4,'Digit5':5,
+  'Digit6':6,'Digit7':7,'Digit8':8,'Digit9':9,'Digit0':10,
+}
+// e.key values for Ctrl+digit (Ctrl doesn't remap key values on any OS)
 const KEY_MAP: Record<string, number> = {
   '1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'0':10,
 }
@@ -35,6 +41,7 @@ export default function App() {
   const setSelectedMarkerId = useTrackStore((s) => s.setSelectedMarkerId)
   const zoomH               = useTrackStore((s) => s.zoomH)
   const setZoomH            = useTrackStore((s) => s.setZoomH)
+  const setScrollStartTime  = useTrackStore((s) => s.setScrollStartTime)
 
   const [markerPanelEditingId, setMarkerPanelEditingId] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -146,7 +153,7 @@ export default function App() {
         }
       }
 
-      const num = KEY_MAP[e.key]
+      const num = CODE_MAP[e.code]
       if (!num) return
       if (e.ctrlKey) return  // Ctrl+digit = jump-to-marker, handled below
 
@@ -283,6 +290,11 @@ export default function App() {
       <input ref={addInputRef} type="file" accept="audio/*" multiple className="sr-only"
         onChange={(e) => { if (e.target.files) handleFiles(Array.from(e.target.files)); e.target.value = '' }}
       />
+
+      {/* Single scrollbar above stems */}
+      {stems.length > 0 && (
+        <WaveScrollBar duration={longestDuration} onScroll={setScrollStartTime} />
+      )}
 
       {/* Main */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">

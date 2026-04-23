@@ -93,12 +93,21 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
       window.dispatchEvent(new CustomEvent('tracklab:userseeked', { detail: t }))
     })
 
-    // Sync zoom/scroll to store so BeatGrid can follow
+    // After zoom, read the new scroll position from the wrapper (single source of truth)
     instance.on('zoom', (pps: number) => {
       setCurrentPps(pps)
+      if (isFirst) {
+        requestAnimationFrame(() => {
+          const w = instance.getWrapper()
+          if (w) setScrollStartTime(w.scrollLeft / pps)
+        })
+      }
     })
-    instance.on('scroll', (startTime: number) => {
-      setScrollStartTime(startTime)
+
+    // Hide native scrollbar — WaveScrollBar component takes over
+    requestAnimationFrame(() => {
+      const wrapper = instance.getWrapper()
+      if (wrapper) wrapper.classList.add('ws-hide-scroll')
     })
 
     // Track container width via ResizeObserver
@@ -152,17 +161,18 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     try { ws.zoom(fitPpsRef.current * zoomH) } catch { /* not loaded */ }
   }, [ws, zoomH, isFirst])
 
-  // Non-first stems follow the first stem's zoom + scroll position
+  // Non-first stems follow the first stem's zoom level
   useEffect(() => {
     if (isFirst || !ws || currentPps === 0) return
     try { ws.zoom(currentPps) } catch { /* not loaded */ }
   }, [ws, currentPps, isFirst])
 
+  // All stems sync scroll position from store (WaveScrollBar drives scrollStartTime)
   useEffect(() => {
-    if (isFirst || !ws || currentPps === 0) return
+    if (!ws || currentPps === 0) return
     const wrapper = ws.getWrapper()
     if (wrapper) wrapper.scrollLeft = scrollStartTime * currentPps
-  }, [ws, scrollStartTime, currentPps, isFirst])
+  }, [ws, scrollStartTime, currentPps])
 
   return (
     <div className="relative">

@@ -33,7 +33,7 @@ export function StemRow({ stem, stemIndex, audioBuffer, wsRef, isFirst, onSeek }
 
   return (
     <div
-      className={`border-b border-zinc-800 last:border-0${!isFirst ? ' ws-secondary' : ''}`}
+      className="border-b border-zinc-800 last:border-0"
       onClick={() => setFocusedStemId(stem.id)}
     >
       {/* Stem header — sticky so it stays visible when scrolling */}
