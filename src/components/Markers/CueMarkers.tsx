@@ -24,22 +24,28 @@ export function CueMarkers({ duration, stemId }: Props) {
   // Visible time window
   const visibleEndTime = scrollStartTime + containerWidth / currentPps
 
-  // Compute stagger rows for visible markers to avoid label overlap
-  const BADGE_PX = 60  // proximity threshold — wider than badge to reduce label overlap
+  // Estimate rendered width of a label string (10px monospace ≈ 6px/char + 8px padding)
+  const labelRight = (label: string, markerPx: number) =>
+    markerPx + 4 + label.length * 6 + 8
+
   const visibleMarkers = cueMarkers.filter(
     (m) => m.time >= scrollStartTime - 2 && m.time <= visibleEndTime + 2
   )
+  // Assign rows: for each marker (left→right), find the first row where its label
+  // doesn't overlap any already-placed marker's label or badge in that row.
   const rowAssignment = new Map<string, number>()
   for (const m of visibleMarkers) {
     const px = (m.time - scrollStartTime) * currentPps
-    // Find the lowest row where no prior marker is within BADGE_PX
     let row = 0
     while (true) {
-      const conflict = visibleMarkers.find((other) => {
-        if (other.id === m.id) return false
-        if ((rowAssignment.get(other.id) ?? 0) !== row) return false
+      const conflict = visibleMarkers.some((other) => {
+        if (other.id === m.id || (rowAssignment.get(other.id) ?? -1) !== row) return false
         const otherPx = (other.time - scrollStartTime) * currentPps
-        return Math.abs(px - otherPx) < BADGE_PX
+        // other's content extends to: label right edge (or badge right if no label)
+        const otherContentRight = other.label ? labelRight(other.label, otherPx) : otherPx + 12
+        // m's content starts at: badge left edge
+        const mContentLeft = px - 10
+        return otherContentRight > mContentLeft
       })
       if (!conflict) break
       row++

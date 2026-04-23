@@ -147,8 +147,13 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
         ws.zoom(pps)
         setCurrentPps(pps)
         setContainerWidth(w)
-        // Capture scroll wrapper once DOM is fully built
-        scrollWrapperRef.current = ws.getWrapper() ?? null
+        // Capture scroll wrapper and hide its native scrollbar
+        const sw = ws.getWrapper() ?? null
+        scrollWrapperRef.current = sw
+        if (sw) {
+          sw.classList.add('ws-no-scroll')
+          ;(sw.style as unknown as Record<string,string>).scrollbarWidth = 'none'
+        }
       })
       .catch((err: unknown) => console.error('WaveSurfer load error:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
