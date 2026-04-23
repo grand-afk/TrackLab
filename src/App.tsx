@@ -123,12 +123,12 @@ export default function App() {
     })
   }
 
-  // Marker number keys: 1-0 and Alt+1-0
+  // Marker number keys: 1-0 and Alt+1-0 (not when Ctrl held — that's jump-to-marker)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const num = KEY_MAP[e.key]
       if (!num) return
-      // Only if not focused on an input
+      if (e.ctrlKey) return  // Ctrl+digit handled in arrow-key handler
       if (document.activeElement?.tagName === 'INPUT') return
       e.preventDefault()
       dropMarker(e.altKey ? num + 10 : num)
@@ -147,8 +147,8 @@ export default function App() {
         const dir = e.key === 'ArrowLeft' ? -1 : 1
         if (selectedMarkerId) {
           e.preventDefault()
-          const delta = dir * (e.shiftKey ? 0.01 : 0.1)
-          nudgeMarker(delta)
+          const delta = e.ctrlKey && e.shiftKey ? 0.001 : e.shiftKey ? 0.01 : 0.1
+          nudgeMarker(dir * delta)
         } else {
           e.preventDefault()
           handleSkip(e.shiftKey, dir as 1 | -1)

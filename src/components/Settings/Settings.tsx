@@ -43,16 +43,16 @@ export function Settings({ open, onClose }: Props) {
 
   function capture(action: string, e: React.KeyboardEvent) {
     e.preventDefault()
+    const isModifier = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)
+    if (isModifier) return  // wait for the actual key
     const parts: string[] = []
     if (e.ctrlKey || e.metaKey) parts.push('ctrl')
     if (e.shiftKey) parts.push('shift')
     if (e.altKey)   parts.push('alt')
     const key = e.key === ' ' ? 'Space' : e.key
-    if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) parts.push(key)
-    if (parts.length) {
-      updateSettings({ shortcuts: { ...shortcuts, [action]: parts.join('+') } })
-      setEditing(null)
-    }
+    parts.push(key)
+    updateSettings({ shortcuts: { ...shortcuts, [action]: parts.join('+') } })
+    setEditing(null)
   }
 
   return (
@@ -141,7 +141,8 @@ export function Settings({ open, onClose }: Props) {
           <p><span className="text-zinc-400 font-mono">Alt+1–0</span> · Markers 11–20</p>
           <p><span className="text-zinc-400 font-mono">Ctrl+1–0</span> · Jump to marker</p>
           <p><span className="text-zinc-400 font-mono">← →</span> · Skip / nudge selected marker</p>
-          <p><span className="text-zinc-400 font-mono">Shift+← →</span> · Fine skip / nudge</p>
+          <p><span className="text-zinc-400 font-mono">Shift+← →</span> · Fine skip / nudge (±0.01s)</p>
+          <p><span className="text-zinc-400 font-mono">Ctrl+Shift+← →</span> · Very fine nudge (±0.001s)</p>
           <p><span className="text-zinc-400 font-mono">F2</span> · Edit selected marker label</p>
           <p><span className="text-zinc-400 font-mono">Delete</span> · Remove selected marker</p>
           <p><span className="text-zinc-400 font-mono">G</span> · Focus time input</p>

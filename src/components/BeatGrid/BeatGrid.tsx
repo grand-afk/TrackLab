@@ -3,6 +3,8 @@ import { useTrackStore, type BeatGridGranularity } from '../../store/useTrackSto
 
 type Props = { bpm: number; duration: number }
 
+// Assumes 4/4 time. '1' = 1 bar (4 beats), '1/4' = 1 beat, etc.
+const BEATS_PER_BAR = 4
 const DIVS: Record<BeatGridGranularity, number> = {
   '1': 1, '1/2': 2, '1/4': 4, '1/8': 8, '1/16': 16,
 }
@@ -25,18 +27,24 @@ export function BeatGrid({ bpm, duration }: Props) {
   const marks = useMemo(() => {
     if (!effectiveBpm || !duration || !currentPps) return []
     const div = DIVS[granularity]
-    const interval = 60 / effectiveBpm / div       // seconds per mark
+    // interval: each grid line represents (BEATS_PER_BAR / div) beats
+    const beatSeconds = 60 / effectiveBpm
+    const interval = beatSeconds * (BEATS_PER_BAR / div)  // seconds per mark
     const first = Math.max(0, Math.floor(scrollStart / interval) - 1)
     const last  = Math.min(Math.ceil(duration / interval) + 1, Math.ceil(visibleEnd / interval) + 1)
+    // Min px between bar number labels (avoid crowding)
+    const labelEvery = Math.max(1, Math.ceil(20 / (interval * currentPps)))
     const result = []
     for (let i = first; i <= last; i++) {
       const t = i * interval
       if (t > duration) break
+      const isBar = i % div === 0
+      const barNum = Math.floor(i / div) + 1
       result.push({
         t,
-        isBar: i % div === 0,
-        barNum: Math.floor(i / div) + 1,
-        subIndex: i % div,
+        isBar,
+        barNum,
+        showLabel: isBar && barNum % labelEvery === 0,
       })
     }
     return result
@@ -76,7 +84,7 @@ export function BeatGrid({ bpm, duration }: Props) {
 
       {/* Beat ruler — synced to WaveSurfer scroll+zoom via store */}
       <div className="relative h-9 overflow-hidden" style={{ minWidth: 0 }}>
-        {currentPps > 0 && marks.map(({ t, isBar, barNum }) => {
+        {currentPps > 0 && marks.map(({ t, isBar, barNum, showLabel }) => {
           const left = (t - scrollStart) * currentPps
           if (left < -20 || left > containerW + 20) return null
           return (
@@ -87,13 +95,15 @@ export function BeatGrid({ bpm, duration }: Props) {
             >
               {isBar ? (
                 <>
-                  <div className="w-px bg-zinc-500" style={{ height: 28 }} />
-                  <span className="text-[10px] text-zinc-400 font-mono leading-none mt-0.5">
-                    {barNum}
-                  </span>
+                  <div className="w-px bg-zinc-500" style={{ height: showLabel ? 22 : 14 }} />
+                  {showLabel && (
+                    <span className="text-[10px] text-zinc-400 font-mono leading-none mt-0.5">
+                      {barNum}
+                    </span>
+                  )}
                 </>
               ) : (
-                <div className="w-px bg-zinc-700" style={{ height: 14, marginTop: 4 }} />
+                <div className="w-px bg-zinc-700" style={{ height: 10, marginTop: 4 }} />
               )}
             </div>
           )

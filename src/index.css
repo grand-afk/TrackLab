@@ -26,6 +26,11 @@ html, body, #root {
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #18181b; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+::-webkit-scrollbar-track { background: #09090b; }
+::-webkit-scrollbar-thumb { background: #71717a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #d4d4d8; }
+
+/* Hide WaveSurfer internal scrollbar on non-primary stems;
+   the first stem's scrollbar drives all others programmatically */
+.ws-secondary ::-webkit-scrollbar { display: none; }
+.ws-secondary { scrollbar-width: none; }

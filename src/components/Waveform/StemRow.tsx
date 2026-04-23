@@ -25,10 +25,10 @@ export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const effectiveBpm = bpmOverride ?? stem.bpm ?? 0
 
   return (
-    <div className="border-b border-zinc-800 last:border-0">
-      {/* Stem header */}
+    <div className={`border-b border-zinc-800 last:border-0${!isFirst ? ' ws-secondary' : ''}`}>
+      {/* Stem header — sticky so it stays visible when scrolling */}
       <div
-        className="flex items-center gap-3 px-3 py-1.5"
+        className="sticky top-0 z-10 flex items-center gap-3 px-3 py-1.5 bg-zinc-900"
         style={{ borderLeft: `3px solid ${stem.color}` }}
       >
         <div className="flex-1 min-w-0">

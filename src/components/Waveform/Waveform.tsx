@@ -23,6 +23,8 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
   const [ws, setWs] = useState<WaveSurfer | null>(null)
   const zoomH = useTrackStore((s) => s.zoomH)
+  const currentPps = useTrackStore((s) => s.currentPps)
+  const scrollStartTime = useTrackStore((s) => s.scrollStartTime)
   const setPlayheadTime = useTrackStore((s) => s.setPlayheadTime)
   const setPlaying = useTrackStore((s) => s.setPlaying)
   const updateStem = useTrackStore((s) => s.updateStem)
@@ -138,11 +140,23 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws, audioBuffer])
 
-  // Keyboard zoom (Ctrl + / -) still works via zoomH multiplier
+  // Keyboard zoom (Ctrl + / -) still works via zoomH multiplier — first stem only
   useEffect(() => {
-    if (!ws || fitPpsRef.current === 0) return
+    if (!ws || !isFirst || fitPpsRef.current === 0) return
     try { ws.zoom(fitPpsRef.current * zoomH) } catch { /* not loaded */ }
-  }, [ws, zoomH])
+  }, [ws, zoomH, isFirst])
+
+  // Non-first stems follow the first stem's zoom + scroll position
+  useEffect(() => {
+    if (isFirst || !ws || currentPps === 0) return
+    try { ws.zoom(currentPps) } catch { /* not loaded */ }
+  }, [ws, currentPps, isFirst])
+
+  useEffect(() => {
+    if (isFirst || !ws || currentPps === 0) return
+    const wrapper = ws.getWrapper()
+    if (wrapper) wrapper.scrollLeft = scrollStartTime * currentPps
+  }, [ws, scrollStartTime, currentPps, isFirst])
 
   return (
     <div className="relative">

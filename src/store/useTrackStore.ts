@@ -104,9 +104,9 @@ const DEFAULT_SETTINGS: Settings = {
     'zoom-in':     '=',
     'zoom-out':    '-',
     'goto':        'g',
-    'settings':    'ctrl+comma',
+    'settings':    'ctrl+,',
     'export':      'ctrl+e',
-    'clear-markers': 'ctrl+shift+Delete',
+    'clear-markers': 'ctrl+shift+m',
     'edit-label':  'F2',
   },
   skip: {
