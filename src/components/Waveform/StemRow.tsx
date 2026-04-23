@@ -6,25 +6,28 @@ import { Spectrogram } from '../Spectrogram/Spectrogram'
 import { BeatGrid } from '../BeatGrid/BeatGrid'
 import { CueMarkers } from '../Markers/CueMarkers'
 import { ErrorBoundary } from '../ErrorBoundary'
-import { useTrackStore, type Stem } from '../../store/useTrackStore'
+import { useTrackStore, type Stem, STEM_LETTERS } from '../../store/useTrackStore'
 import { cn } from '../../lib/utils'
 
 type Props = {
   stem: Stem
+  stemIndex: number
   audioBuffer: AudioBuffer | null
   wsRef: React.MutableRefObject<WaveSurfer | null>
   isFirst: boolean
   onSeek: (t: number) => void
 }
 
-export function StemRow({ stem, audioBuffer, wsRef, isFirst, onSeek }: Props) {
+export function StemRow({ stem, stemIndex, audioBuffer, wsRef, isFirst, onSeek }: Props) {
   const [showSpec, setShowSpec] = useState(true)
   const updateStem       = useTrackStore((s) => s.updateStem)
   const removeStem       = useTrackStore((s) => s.removeStem)
   const bpmOverride      = useTrackStore((s) => s.bpmOverride)
   const focusedStemId    = useTrackStore((s) => s.focusedStemId)
   const setFocusedStemId = useTrackStore((s) => s.setFocusedStemId)
-  const isFocused = focusedStemId === stem.id
+  const totalStems       = useTrackStore((s) => s.stems.length)
+  const isFocused        = focusedStemId === stem.id
+  const letter           = STEM_LETTERS[stemIndex] ?? '?'
 
   const effectiveBpm = bpmOverride ?? stem.bpm ?? 0
 
@@ -38,6 +41,14 @@ export function StemRow({ stem, audioBuffer, wsRef, isFirst, onSeek }: Props) {
         className={`sticky top-0 z-10 flex items-center gap-3 px-3 py-1.5 bg-zinc-900 transition-colors ${isFocused ? 'bg-zinc-800/80' : ''}`}
         style={{ borderLeft: `${isFocused ? 4 : 3}px solid ${stem.color}${isFocused ? '' : '99'}` }}
       >
+        {totalStems >= 2 && (
+          <span
+            className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-zinc-900 shrink-0 select-none"
+            style={{ backgroundColor: stem.color }}
+          >
+            {letter}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-zinc-200 truncate">{stem.name}</p>
           <p className="text-xs text-zinc-500 font-mono flex items-center gap-2">
@@ -101,7 +112,7 @@ export function StemRow({ stem, audioBuffer, wsRef, isFirst, onSeek }: Props) {
       <ErrorBoundary fallback={(e) => (
         <div className="px-3 py-2 text-xs text-red-400 font-mono">Waveform error: {e.message}</div>
       )}>
-        <div className="relative">
+        <div className="relative overflow-hidden">
           <Waveform stem={stem} audioBuffer={audioBuffer} wsRef={wsRef} isFirst={isFirst} />
           {stem.duration > 0 && <CueMarkers duration={stem.duration} stemId={stem.id} />}
         </div>

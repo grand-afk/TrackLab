@@ -94,6 +94,7 @@ type TrackStore = {
 }
 
 const STEM_COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4']
+export const STEM_LETTERS = ['A','B','C','D','E','F']
 
 export const MARKER_COLORS = [
   '#f59e0b','#ef4444','#10b981','#6366f1','#8b5cf6',

@@ -23,7 +23,6 @@ const KEY_MAP: Record<string, number> = {
 
 export default function App() {
   const stems               = useTrackStore((s) => s.stems)
-  const focusedStemId       = useTrackStore((s) => s.focusedStemId)
   const addStem             = useTrackStore((s) => s.addStem)
   const setPlaying          = useTrackStore((s) => s.setPlaying)
   const setPlayheadTime     = useTrackStore((s) => s.setPlayheadTime)
@@ -132,15 +131,39 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [longestDuration])
 
-  // Marker number keys: 1-0 and Alt+1-0
+  // Marker number keys: 1-0 and Alt+1-0; Shift+1-0 deletes; A-F focuses stem
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return
+
+      // A–F: focus stem by letter
+      if (!e.ctrlKey && !e.altKey && !e.shiftKey && e.key.length === 1) {
+        const letterIdx = 'abcdef'.indexOf(e.key.toLowerCase())
+        if (letterIdx !== -1) {
+          const target = useTrackStore.getState().stems[letterIdx]
+          if (target) { e.preventDefault(); useTrackStore.getState().setFocusedStemId(target.id) }
+          return
+        }
+      }
+
       const num = KEY_MAP[e.key]
       if (!num) return
       if (e.ctrlKey) return  // Ctrl+digit = jump-to-marker, handled below
-      if (document.activeElement?.tagName === 'INPUT') return
+
       e.preventDefault()
-      dropMarker(e.altKey ? num + 10 : num)
+      if (e.shiftKey) {
+        // Shift+digit: delete marker by number on focused stem
+        const targetNum = e.altKey ? num + 10 : num
+        const { focusedStemId: fsid, cueMarkers: markers, selectedMarkerId: selId } = useTrackStore.getState()
+        if (!fsid) return
+        const m = markers.find((c) => c.stemId === fsid && c.number === targetNum)
+        if (m) {
+          removeCueMarker(m.id)
+          if (selId === m.id) setSelectedMarkerId(null)
+        }
+      } else {
+        dropMarker(e.altKey ? num + 10 : num)
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -217,8 +240,7 @@ export default function App() {
     'clear-markers': clearFocusedMarkers,
   })
 
-  const focusedStem = stems.find((s) => s.id === focusedStemId)
-  const focusedMarkers = cueMarkers.filter((m) => m.stemId === focusedStemId)
+  const hasAnyMarkers = cueMarkers.length > 0
 
   return (
     <div className="flex flex-col h-[100dvh] bg-zinc-950 text-zinc-100">
@@ -280,19 +302,16 @@ export default function App() {
               <div className="p-6 text-sm text-red-400 font-mono">Render error: {e.message}</div>
             )}>
               {stems.map((stem, i) => (
-                <StemRow key={stem.id} stem={stem}
+                <StemRow key={stem.id} stem={stem} stemIndex={i}
                   audioBuffer={audioBuffers.get(stem.id) ?? null}
                   wsRef={getWsRef(stem.id)} isFirst={i === 0}
                   onSeek={seekAll} />
               ))}
             </ErrorBoundary>
-            {focusedMarkers.length > 0 && (
+            {hasAnyMarkers && (
               <MarkerPanel
-                duration={longestDuration}
-                stemName={focusedStem?.name ?? ''}
-                stemColor={focusedStem?.color ?? '#6366f1'}
                 onSeek={seekAll}
-                onClearAll={clearFocusedMarkers}
+                onClearStem={(stemId) => clearCueMarkers(stemId)}
                 editingId={markerPanelEditingId}
                 setEditingId={setMarkerPanelEditingId}
               />
