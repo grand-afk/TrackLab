@@ -3,10 +3,12 @@ import { useTrackStore } from '../../store/useTrackStore'
 
 type Props = {
   duration: number
+  stemId: string
 }
 
-export function CueMarkers({ duration }: Props) {
-  const cueMarkers = useTrackStore((s) => s.cueMarkers)
+export function CueMarkers({ duration, stemId }: Props) {
+  const allMarkers = useTrackStore((s) => s.cueMarkers)
+  const cueMarkers = allMarkers.filter((m) => m.stemId === stemId)
   const selectedMarkerId = useTrackStore((s) => s.selectedMarkerId)
   const setSelectedMarkerId = useTrackStore((s) => s.setSelectedMarkerId)
   const updateCueMarker = useTrackStore((s) => s.updateCueMarker)

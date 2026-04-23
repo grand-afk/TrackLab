@@ -3,6 +3,14 @@ import { X } from 'lucide-react'
 import { useTrackStore } from '../../store/useTrackStore'
 import type { SkipUnit } from '../../store/useTrackStore'
 
+const TIME_SIG_TOPS    = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+const TIME_SIG_BOTTOMS = [2, 4, 8, 16]
+const SUBDIV_OPTIONS   = [
+  { value: 2, label: '1/8 note' },
+  { value: 4, label: '1/16 note' },
+  { value: 8, label: '1/32 note' },
+]
+
 type Props = { open: boolean; onClose: () => void }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -25,6 +33,9 @@ const cls = {
 export function Settings({ open, onClose }: Props) {
   const shortcuts        = useTrackStore((s) => s.settings.shortcuts)
   const skip             = useTrackStore((s) => s.settings.skip)
+  const timeSigTop       = useTrackStore((s) => s.settings.timeSignatureTop)
+  const timeSigBot       = useTrackStore((s) => s.settings.timeSignatureBottom)
+  const subdivTicks      = useTrackStore((s) => s.settings.subdivisionTicks)
   const updateSettings   = useTrackStore((s) => s.updateSettings)
   const updateSkipSettings = useTrackStore((s) => s.updateSkipSettings)
   const [editing, setEditing] = useState<string | null>(null)
@@ -110,6 +121,48 @@ export function Settings({ open, onClose }: Props) {
                 </select>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Time signature + subdivision */}
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Time Signature &amp; Bars Display</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-300">Time signature</span>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={timeSigTop}
+                  onChange={(e) => updateSettings({ timeSignatureTop: parseInt(e.target.value) })}
+                  className={cls.select}
+                >
+                  {TIME_SIG_TOPS.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="text-zinc-500 text-xs">/</span>
+                <select
+                  value={timeSigBot}
+                  onChange={(e) => updateSettings({ timeSignatureBottom: parseInt(e.target.value) })}
+                  className={cls.select}
+                >
+                  {TIME_SIG_BOTTOMS.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-300">Bar subdivision</span>
+              <select
+                value={subdivTicks}
+                onChange={(e) => updateSettings({ subdivisionTicks: parseInt(e.target.value) })}
+                className={cls.select}
+              >
+                {SUBDIV_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-zinc-600 mt-1">
+              Affects bars:beats display in transport. Beat grid always shows whole-bar divisions.
+            </p>
           </div>
         </div>
 

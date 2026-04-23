@@ -3,23 +3,26 @@ import { useTrackStore, type BeatGridGranularity } from '../../store/useTrackSto
 
 type Props = { bpm: number; duration: number }
 
-// Assumes 4/4 time. '1' = 1 bar (4 beats), '1/4' = 1 beat, etc.
-const BEATS_PER_BAR = 4
+// '1' granularity = 1 full bar; denominator note and numerator come from settings
 const DIVS: Record<BeatGridGranularity, number> = {
   '1': 1, '1/2': 2, '1/4': 4, '1/8': 8, '1/16': 16,
 }
 const GRANULARITIES: BeatGridGranularity[] = ['1', '1/2', '1/4', '1/8', '1/16']
 
 export function BeatGrid({ bpm, duration }: Props) {
-  const granularity   = useTrackStore((s) => s.granularity)
+  const granularity    = useTrackStore((s) => s.granularity)
   const setGranularity = useTrackStore((s) => s.setGranularity)
-  const bpmOverride   = useTrackStore((s) => s.bpmOverride)
+  const bpmOverride    = useTrackStore((s) => s.bpmOverride)
   const setBpmOverride = useTrackStore((s) => s.setBpmOverride)
-  const currentPps    = useTrackStore((s) => s.currentPps)
-  const scrollStart   = useTrackStore((s) => s.scrollStartTime)
-  const containerW    = useTrackStore((s) => s.containerWidth)
+  const currentPps     = useTrackStore((s) => s.currentPps)
+  const scrollStart    = useTrackStore((s) => s.scrollStartTime)
+  const containerW     = useTrackStore((s) => s.containerWidth)
+  const timeSigTop     = useTrackStore((s) => s.settings.timeSignatureTop)
+  const timeSigBot     = useTrackStore((s) => s.settings.timeSignatureBottom)
 
-  const effectiveBpm = bpmOverride ?? bpm
+  const effectiveBpm    = bpmOverride ?? bpm
+  const BEATS_PER_BAR   = timeSigTop
+  const NOTE_MULTIPLIER = 4 / timeSigBot  // multiplier vs quarter note
 
   // Only render marks within the visible window
   const visibleEnd = scrollStart + (containerW / (currentPps || 1))
@@ -27,9 +30,9 @@ export function BeatGrid({ bpm, duration }: Props) {
   const marks = useMemo(() => {
     if (!effectiveBpm || !duration || !currentPps) return []
     const div = DIVS[granularity]
-    // interval: each grid line represents (BEATS_PER_BAR / div) beats
-    const beatSeconds = 60 / effectiveBpm
-    const interval = beatSeconds * (BEATS_PER_BAR / div)  // seconds per mark
+    // interval: each grid line = (BEATS_PER_BAR / div) denominator notes
+    const noteDuration = (60 / effectiveBpm) * NOTE_MULTIPLIER  // one denominator note in seconds
+    const interval = noteDuration * (BEATS_PER_BAR / div)  // seconds per mark
     const first = Math.max(0, Math.floor(scrollStart / interval) - 1)
     const last  = Math.min(Math.ceil(duration / interval) + 1, Math.ceil(visibleEnd / interval) + 1)
     // Min px between bar number labels (avoid crowding)

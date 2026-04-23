@@ -17,8 +17,9 @@ export type Stem = {
 
 export type CueMarker = {
   id: string
-  number: number      // 1–20
-  time: number        // seconds
+  stemId: string    // which stem this marker belongs to
+  number: number    // 1–20 per stem
+  time: number      // seconds
   label: string
   color: string
 }
@@ -35,19 +36,23 @@ export type BeatGridGranularity = '1' | '1/2' | '1/4' | '1/8' | '1/16'
 export type SkipUnit = 'seconds' | 'beats'
 
 export type SkipSettings = {
-  amount: number       // default 5
-  unit: SkipUnit       // default 'seconds'
-  fineAmount: number   // default 0.5
-  fineUnit: SkipUnit   // default 'seconds'
+  amount: number
+  unit: SkipUnit
+  fineAmount: number
+  fineUnit: SkipUnit
 }
 
 type Settings = {
   shortcuts: Record<string, string>
   skip: SkipSettings
+  timeSignatureTop: number     // numerator (e.g. 4, 3, 5, 7)
+  timeSignatureBottom: number  // denominator (2, 4, 8, 16)
+  subdivisionTicks: number     // ticks per denominator note: 2=1/8, 4=1/16, 8=1/32
 }
 
 type TrackStore = {
   stems: Stem[]
+  focusedStemId: string | null
   cueMarkers: CueMarker[]
   selectedMarkerId: string | null
   annotations: Annotation[]
@@ -64,11 +69,12 @@ type TrackStore = {
   addStem: (stem: Stem) => void
   removeStem: (id: string) => void
   updateStem: (id: string, patch: Partial<Stem>) => void
+  setFocusedStemId: (id: string | null) => void
 
   addCueMarker: (marker: CueMarker) => void
   updateCueMarker: (id: string, patch: Partial<CueMarker>) => void
   removeCueMarker: (id: string) => void
-  clearCueMarkers: () => void
+  clearCueMarkers: (stemId?: string) => void
   setSelectedMarkerId: (id: string | null) => void
 
   addAnnotation: (ann: Annotation) => void
@@ -98,81 +104,105 @@ export const MARKER_COLORS = [
 
 const DEFAULT_SETTINGS: Settings = {
   shortcuts: {
-    'play-pause':  'Space',
-    'stop':        'Escape',
-    'skip-start':  'Home',
-    'zoom-in':     '=',
-    'zoom-out':    '-',
-    'goto':        'g',
-    'settings':    'ctrl+,',
-    'export':      'ctrl+e',
+    'play-pause':    'Space',
+    'stop':          'Escape',
+    'skip-start':    'Home',
+    'zoom-in':       '=',
+    'zoom-out':      '-',
+    'goto':          'g',
+    'settings':      'ctrl+,',
+    'export':        'ctrl+e',
     'clear-markers': 'ctrl+shift+m',
-    'edit-label':  'F2',
+    'edit-label':    'F2',
   },
   skip: {
     amount: 5, unit: 'seconds',
     fineAmount: 0.5, fineUnit: 'seconds',
   },
+  timeSignatureTop: 4,
+  timeSignatureBottom: 4,
+  subdivisionTicks: 4,  // 1/16 note resolution by default
 }
+
+type StoreImpl = TrackStore & { getState: () => TrackStore }
 
 export const useTrackStore = create<TrackStore>()(
   persist(
-    (set, get) => ({
-      stems: [], cueMarkers: [], selectedMarkerId: null, annotations: [],
+    (set) => ({
+      stems: [], focusedStemId: null,
+      cueMarkers: [], selectedMarkerId: null, annotations: [],
       playheadTime: 0, isPlaying: false,
       currentPps: 0, scrollStartTime: 0, containerWidth: 0,
-      zoomH: 1, bpmOverride: null, granularity: '1/4',
+      zoomH: 1, bpmOverride: null, granularity: '1/4' as BeatGridGranularity,
       settings: DEFAULT_SETTINGS,
 
-      addStem: (stem) =>
-        set((s) => ({ stems: [...s.stems, { ...stem, color: STEM_COLORS[s.stems.length % STEM_COLORS.length] }] })),
-      removeStem: (id) => set((s) => ({ stems: s.stems.filter((t) => t.id !== id) })),
-      updateStem: (id, patch) =>
+      addStem: (stem: Stem) =>
+        set((s) => ({
+          stems: [...s.stems, { ...stem, color: STEM_COLORS[s.stems.length % STEM_COLORS.length] }],
+          focusedStemId: s.focusedStemId ?? stem.id,
+        })),
+      removeStem: (id: string) =>
+        set((s) => ({
+          stems: s.stems.filter((t) => t.id !== id),
+          focusedStemId: s.focusedStemId === id
+            ? (s.stems.find((t) => t.id !== id)?.id ?? null)
+            : s.focusedStemId,
+          cueMarkers: s.cueMarkers.filter((m) => m.stemId !== id),
+        })),
+      updateStem: (id: string, patch: Partial<Stem>) =>
         set((s) => ({ stems: s.stems.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+      setFocusedStemId: (id: string | null) => set({ selectedMarkerId: null, focusedStemId: id }),
 
-      addCueMarker: (marker) =>
-        set((s) => ({ cueMarkers: [...s.cueMarkers.filter((m) => m.number !== marker.number), marker]
-          .sort((a, b) => a.time - b.time) })),
-      updateCueMarker: (id, patch) =>
-        set((s) => ({ cueMarkers: s.cueMarkers.map((m) => (m.id === id ? { ...m, ...patch } : m))
-          .sort((a, b) => a.time - b.time) })),
-      removeCueMarker: (id) =>
+      addCueMarker: (marker: CueMarker) =>
+        set((s) => ({
+          cueMarkers: [
+            ...s.cueMarkers.filter((m) => !(m.stemId === marker.stemId && m.number === marker.number)),
+            marker,
+          ].sort((a, b) => a.time - b.time),
+        })),
+      updateCueMarker: (id: string, patch: Partial<CueMarker>) =>
+        set((s) => ({
+          cueMarkers: s.cueMarkers
+            .map((m) => (m.id === id ? { ...m, ...patch } : m))
+            .sort((a, b) => a.time - b.time),
+        })),
+      removeCueMarker: (id: string) =>
         set((s) => ({ cueMarkers: s.cueMarkers.filter((m) => m.id !== id) })),
-      clearCueMarkers: () => set({ cueMarkers: [], selectedMarkerId: null }),
-      setSelectedMarkerId: (id) => set({ selectedMarkerId: id }),
+      clearCueMarkers: (stemId?: string) =>
+        set((s) => ({
+          cueMarkers: stemId ? s.cueMarkers.filter((m) => m.stemId !== stemId) : [],
+          selectedMarkerId: null,
+        })),
+      setSelectedMarkerId: (id: string | null) => set({ selectedMarkerId: id }),
 
-      addAnnotation: (ann) => set((s) => ({ annotations: [...s.annotations, ann] })),
-      updateAnnotation: (id, patch) =>
+      addAnnotation: (ann: Annotation) => set((s) => ({ annotations: [...s.annotations, ann] })),
+      updateAnnotation: (id: string, patch: Partial<Annotation>) =>
         set((s) => ({ annotations: s.annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
-      removeAnnotation: (id) =>
+      removeAnnotation: (id: string) =>
         set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
 
-      setPlayheadTime: (t) => set({ playheadTime: t }),
-      setPlaying: (v) => set({ isPlaying: v }),
-      setCurrentPps: (pps) => set({ currentPps: pps }),
-      setScrollStartTime: (t) => set({ scrollStartTime: t }),
-      setContainerWidth: (w) => set({ containerWidth: w }),
-      setZoomH: (v) => set({ zoomH: Math.max(1, Math.min(50, v)) }),
-      setBpmOverride: (v) => set({ bpmOverride: v }),
-      setGranularity: (g) => set({ granularity: g }),
-      updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-      updateSkipSettings: (patch) =>
+      setPlayheadTime: (t: number) => set({ playheadTime: t }),
+      setPlaying: (v: boolean) => set({ isPlaying: v }),
+      setCurrentPps: (pps: number) => set({ currentPps: pps }),
+      setScrollStartTime: (t: number) => set({ scrollStartTime: t }),
+      setContainerWidth: (w: number) => set({ containerWidth: w }),
+      setZoomH: (v: number) => set({ zoomH: Math.max(1, Math.min(50, v)) }),
+      setBpmOverride: (v: number | null) => set({ bpmOverride: v }),
+      setGranularity: (g: BeatGridGranularity) => set({ granularity: g }),
+      updateSettings: (patch: Partial<Settings>) =>
+        set((s) => ({ settings: { ...s.settings, ...patch } })),
+      updateSkipSettings: (patch: Partial<SkipSettings>) =>
         set((s) => ({ settings: { ...s.settings, skip: { ...s.settings.skip, ...patch } } })),
-
-      // Helper used by App for beat-aware skip
-      getSkipSeconds(fine: boolean): number {
-        const { settings, stems, bpmOverride } = get()
-        const sk = fine ? { amount: settings.skip.fineAmount, unit: settings.skip.fineUnit }
-                        : { amount: settings.skip.amount,     unit: settings.skip.unit }
-        if (sk.unit === 'beats') {
-          const bpm = bpmOverride ?? stems[0]?.bpm ?? 120
-          return (60 / bpm) * sk.amount
-        }
-        return sk.amount
-      },
-    } as TrackStore & { getSkipSeconds: (fine: boolean) => number }),
+    } satisfies TrackStore),
     {
       name: 'tracklab-store',
+      version: 2,
+      migrate: (state: unknown, version: number) => {
+        if (version < 2) {
+          return { ...(state as object), cueMarkers: [] }
+        }
+        return state
+      },
       partialize: (s) => ({
         cueMarkers: s.cueMarkers,
         annotations: s.annotations,
@@ -183,3 +213,43 @@ export const useTrackStore = create<TrackStore>()(
     }
   )
 )
+
+// Suppress unused variable warning for StoreImpl
+void (0 as unknown as StoreImpl)
+
+// Helper — beat-aware skip, accessed via getState() cast
+export function getSkipSeconds(fine: boolean): number {
+  const { settings, stems, bpmOverride } = useTrackStore.getState()
+  const sk = fine
+    ? { amount: settings.skip.fineAmount, unit: settings.skip.fineUnit }
+    : { amount: settings.skip.amount,     unit: settings.skip.unit }
+  if (sk.unit === 'beats') {
+    const bpm = bpmOverride ?? stems[0]?.bpm ?? 120
+    return (60 / bpm) * sk.amount
+  }
+  return sk.amount
+}
+
+// Helper — bars:beats:ticks from seconds
+export function fmtBarsBeats(seconds: number, bpm: number, timeSigTop: number, timeSigBottom: number, subdivTicks: number): string {
+  if (!bpm) return '---:--:--'
+  const beatDur = 60 / bpm                          // quarter note duration
+  const noteDur = beatDur * (4 / timeSigBottom)     // denominator note duration
+  const barDur  = timeSigTop * noteDur
+  const tickDur = noteDur / subdivTicks
+
+  const bar   = Math.floor(seconds / barDur) + 1
+  const beat  = Math.floor((seconds % barDur) / noteDur) + 1
+  const tick  = Math.floor((seconds % noteDur) / tickDur)
+
+  const tickChars = subdivTicks <= 4 ? 2 : 3
+  return `${String(bar).padStart(3,'0')}:${String(beat).padStart(2,'0')}:${String(tick).padStart(tickChars,'0')}`
+}
+
+// Helper — HH:MM:SS
+export function fmtHHMMSS(seconds: number): string {
+  const h  = Math.floor(seconds / 3600)
+  const m  = Math.floor((seconds % 3600) / 60)
+  const s  = Math.floor(seconds % 60)
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+}

@@ -7,7 +7,7 @@ import { Transport } from './components/Transport/Transport'
 import { MarkerPanel } from './components/Markers/MarkerPanel'
 import { Settings } from './components/Settings/Settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { useTrackStore, MARKER_COLORS } from './store/useTrackStore'
+import { useTrackStore, MARKER_COLORS, getSkipSeconds } from './store/useTrackStore'
 import { useDecodeAudioFile } from './hooks/useAudioEngine'
 import { useKeyBindings } from './hooks/useKeyBindings'
 import { analyseAudio } from './lib/essentia'
@@ -23,6 +23,7 @@ const KEY_MAP: Record<string, number> = {
 
 export default function App() {
   const stems               = useTrackStore((s) => s.stems)
+  const focusedStemId       = useTrackStore((s) => s.focusedStemId)
   const addStem             = useTrackStore((s) => s.addStem)
   const setPlaying          = useTrackStore((s) => s.setPlaying)
   const setPlayheadTime     = useTrackStore((s) => s.setPlayheadTime)
@@ -37,7 +38,6 @@ export default function App() {
   const setZoomH            = useTrackStore((s) => s.setZoomH)
 
   const [markerPanelEditingId, setMarkerPanelEditingId] = useState<string | null>(null)
-
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [error, setError]               = useState<string | null>(null)
   const [audioBuffers, setAudioBuffers] = useState<Map<string, AudioBuffer>>(new Map())
@@ -95,8 +95,7 @@ export default function App() {
   }
 
   function handleSkip(fine: boolean, direction: 1 | -1) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const skipSecs: number = (useTrackStore.getState() as any).getSkipSeconds(fine)
+    const skipSecs = getSkipSeconds(fine)
     const t = Math.max(0, Math.min(longestDuration, useTrackStore.getState().playheadTime + skipSecs * direction))
     seekAll(t)
   }
@@ -107,28 +106,30 @@ export default function App() {
   }
 
   function dropMarker(num: number) {
+    const stemId = useTrackStore.getState().focusedStemId
+    if (!stemId) return
     addCueMarker({
-      id: crypto.randomUUID(), number: num,
+      id: crypto.randomUUID(), stemId, number: num,
       time: useTrackStore.getState().playheadTime,
       label: '', color: MARKER_COLORS[(num - 1) % MARKER_COLORS.length],
     })
   }
 
   function nudgeMarker(delta: number) {
-    const { selectedMarkerId, cueMarkers } = useTrackStore.getState()
+    const { selectedMarkerId, cueMarkers: markers } = useTrackStore.getState()
     if (!selectedMarkerId) return
-    const m = cueMarkers.find((c) => c.id === selectedMarkerId)
+    const m = markers.find((c) => c.id === selectedMarkerId)
     if (m) updateCueMarker(selectedMarkerId, {
       time: Math.max(0, Math.min(longestDuration, m.time + delta)),
     })
   }
 
-  // Marker number keys: 1-0 and Alt+1-0 (not when Ctrl held — that's jump-to-marker)
+  // Marker number keys: 1-0 and Alt+1-0
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const num = KEY_MAP[e.key]
       if (!num) return
-      if (e.ctrlKey) return  // Ctrl+digit handled in arrow-key handler
+      if (e.ctrlKey) return  // Ctrl+digit = jump-to-marker, handled below
       if (document.activeElement?.tagName === 'INPUT') return
       e.preventDefault()
       dropMarker(e.altKey ? num + 10 : num)
@@ -138,11 +139,12 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Arrow keys: nudge selected marker OR skip forward/back
+  // Arrow keys: nudge selected marker OR skip; Ctrl+digit: jump to marker
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return
-      const { selectedMarkerId } = useTrackStore.getState()
+      const { selectedMarkerId, focusedStemId: fsid } = useTrackStore.getState()
+
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const dir = e.key === 'ArrowLeft' ? -1 : 1
         if (selectedMarkerId) {
@@ -154,22 +156,25 @@ export default function App() {
           handleSkip(e.shiftKey, dir as 1 | -1)
         }
       }
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedMarkerId) {
         e.preventDefault()
         removeCueMarker(selectedMarkerId)
         setSelectedMarkerId(null)
       }
-      // Ctrl+1–0 jump to marker; Ctrl+Alt+1–0 jump to marker 11–20
+
+      // Ctrl+1–0 / Ctrl+Alt+1–0: jump to marker on focused stem
       if (e.ctrlKey && !e.shiftKey) {
         const num = KEY_MAP[e.key]
         if (num !== undefined) {
           e.preventDefault()
           const targetNum = e.altKey ? num + 10 : num
           const { cueMarkers: markers } = useTrackStore.getState()
-          const m = markers.find((c) => c.number === targetNum)
+          const m = markers.find((c) => c.number === targetNum && c.stemId === fsid)
           if (m) seekAll(m.time)
         }
       }
+
       // F2: edit label of selected marker
       if (e.key === 'F2') {
         e.preventDefault()
@@ -187,6 +192,11 @@ export default function App() {
   const decoding  = stems.some((s) => !audioBuffers.has(s.id))
   const analysing = stems.some((s) => audioBuffers.has(s.id) && s.bpm === null)
 
+  // Clear markers: scoped to focused stem
+  function clearFocusedMarkers() {
+    clearCueMarkers(useTrackStore.getState().focusedStemId ?? undefined)
+  }
+
   useKeyBindings({
     'play-pause':    () => useTrackStore.getState().isPlaying ? pauseAll() : playAll(),
     'stop':          stopAll,
@@ -196,8 +206,11 @@ export default function App() {
     'goto':          () => window.dispatchEvent(new Event('tracklab:goto')),
     'settings':      () => setSettingsOpen(true),
     'export':        doExport,
-    'clear-markers': clearCueMarkers,
+    'clear-markers': clearFocusedMarkers,
   })
+
+  const focusedStem = stems.find((s) => s.id === focusedStemId)
+  const focusedMarkers = cueMarkers.filter((m) => m.stemId === focusedStemId)
 
   return (
     <div className="flex flex-col h-[100dvh] bg-zinc-950 text-zinc-100">
@@ -250,7 +263,7 @@ export default function App() {
             </div>
             <p className="text-xs text-zinc-600 text-center">
               MP3 · WAV · FLAC · AAC · M4A · up to 6 stems<br />
-              Cue markers: press 1–0 while playing · Alt+1–0 for markers 11–20
+              Click a stem to focus it, then press 1–0 to drop cue markers
             </p>
           </div>
         ) : (
@@ -264,11 +277,13 @@ export default function App() {
                   wsRef={getWsRef(stem.id)} isFirst={i === 0} />
               ))}
             </ErrorBoundary>
-            {cueMarkers.length > 0 && (
+            {focusedMarkers.length > 0 && (
               <MarkerPanel
                 duration={longestDuration}
+                stemName={focusedStem?.name ?? ''}
+                stemColor={focusedStem?.color ?? '#6366f1'}
                 onSeek={seekAll}
-                onClearAll={clearCueMarkers}
+                onClearAll={clearFocusedMarkers}
                 editingId={markerPanelEditingId}
                 setEditingId={setMarkerPanelEditingId}
               />

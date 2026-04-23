@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { Play, Pause, Square, SkipBack, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import { useTrackStore } from '../../store/useTrackStore'
+import { useTrackStore, fmtHHMMSS, fmtBarsBeats } from '../../store/useTrackStore'
 
 type Props = {
   onPlay: () => void
@@ -12,69 +12,78 @@ type Props = {
   onAddFile: () => void
 }
 
-// ── Split time input ──────────────────────────────────────────────────────
+// ── HH:MM:SS time input ───────────────────────────────────────────────────
 function TimeInput({ value, duration, onCommit, onCancel }: {
   value: number
   duration: number
   onCommit: (t: number) => void
   onCancel: () => void
 }) {
-  const [mins, setMins] = useState(Math.floor(value / 60))
-  const [secs, setSecs] = useState(Math.floor(value % 60))
-  const [ds,   setDs]   = useState(Math.floor((value % 1) * 10))   // tenths
+  const [hours, setHours] = useState(Math.floor(value / 3600))
+  const [mins,  setMins]  = useState(Math.floor((value % 3600) / 60))
+  const [secs,  setSecs]  = useState(Math.floor(value % 60))
 
+  const hRef = useRef<HTMLInputElement>(null)
   const mRef = useRef<HTMLInputElement>(null)
   const sRef = useRef<HTMLInputElement>(null)
-  const dRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { mRef.current?.focus(); mRef.current?.select() }, [])
+  useEffect(() => { hRef.current?.focus(); hRef.current?.select() }, [])
 
   function commit() {
-    const t = Math.max(0, Math.min(duration, mins * 60 + secs + ds / 10))
+    const t = Math.max(0, Math.min(duration, hours * 3600 + mins * 60 + secs))
     onCommit(t)
   }
 
   const sharedKeys = (e: React.KeyboardEvent, next?: () => void) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit() }
+    if (e.key === 'Enter')  { e.preventDefault(); commit() }
     if (e.key === 'Escape') { e.preventDefault(); onCancel() }
-    if (e.key === 'Tab' && next) { e.preventDefault(); next() }
+    if (e.key === 'Tab' && !e.shiftKey && next) { e.preventDefault(); next() }
   }
 
   const cls = 'bg-transparent text-zinc-100 font-mono text-sm focus:outline-none text-center'
 
   return (
     <div className="flex items-center border border-indigo-500 rounded px-1.5 py-0.5 bg-zinc-800 gap-0">
-      <input ref={mRef} type="number" min={0} value={mins}
-        onChange={(e) => setMins(Math.max(0, parseInt(e.target.value) || 0))}
-        onKeyDown={(e) => sharedKeys(e, () => { sRef.current?.focus(); sRef.current?.select() })}
+      <input ref={hRef} type="number" min={0} value={hours}
+        onChange={(e) => setHours(Math.max(0, parseInt(e.target.value) || 0))}
+        onKeyDown={(e) => sharedKeys(e, () => { mRef.current?.focus(); mRef.current?.select() })}
         className={`${cls} w-6`} />
+      <span className="text-zinc-500 font-mono text-sm select-none">:</span>
+      <input ref={mRef} type="number" min={0} max={59} value={String(mins).padStart(2,'0')}
+        onChange={(e) => setMins(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+        onKeyDown={(e) => {
+          if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); hRef.current?.focus(); hRef.current?.select() }
+          sharedKeys(e, () => { sRef.current?.focus(); sRef.current?.select() })
+        }}
+        className={`${cls} w-8`} />
       <span className="text-zinc-500 font-mono text-sm select-none">:</span>
       <input ref={sRef} type="number" min={0} max={59} value={String(secs).padStart(2,'0')}
         onChange={(e) => setSecs(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
         onKeyDown={(e) => {
-          sharedKeys(e, () => { dRef.current?.focus(); dRef.current?.select() })
           if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); mRef.current?.focus(); mRef.current?.select() }
-        }}
-        className={`${cls} w-8`} />
-      <span className="text-zinc-500 font-mono text-sm select-none">.</span>
-      <input ref={dRef} type="number" min={0} max={9} value={ds}
-        onChange={(e) => setDs(Math.max(0, Math.min(9, parseInt(e.target.value) || 0)))}
-        onKeyDown={(e) => {
           if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); commit() }
-          if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); sRef.current?.focus(); sRef.current?.select() }
           sharedKeys(e)
         }}
-        className={`${cls} w-5`} />
+        className={`${cls} w-8`} />
     </div>
   )
 }
 
 // ── Main component ────────────────────────────────────────────────────────
 export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, onAddFile }: Props) {
-  const isPlaying     = useTrackStore((s) => s.isPlaying)
-  const playheadTime  = useTrackStore((s) => s.playheadTime)
-  const skip          = useTrackStore((s) => s.settings.skip)
+  const isPlaying    = useTrackStore((s) => s.isPlaying)
+  const playheadTime = useTrackStore((s) => s.playheadTime)
+  const skip         = useTrackStore((s) => s.settings.skip)
+  const timeSigTop   = useTrackStore((s) => s.settings.timeSignatureTop)
+  const timeSigBot   = useTrackStore((s) => s.settings.timeSignatureBottom)
+  const subdivTicks  = useTrackStore((s) => s.settings.subdivisionTicks)
+  const stems        = useTrackStore((s) => s.stems)
+  const bpmOverride  = useTrackStore((s) => s.bpmOverride)
+
   const [editing, setEditing] = useState(false)
+
+  // Resolve BPM for bars display (first stem with known BPM or override)
+  const bpm = bpmOverride ?? stems.find((s) => s.bpm != null)?.bpm ?? 0
 
   // G shortcut → open time input
   useEffect(() => {
@@ -83,16 +92,9 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
     return () => window.removeEventListener('tracklab:goto', handler)
   }, [])
 
-  function fmtTime(s: number) {
-    const m  = Math.floor(s / 60)
-    const ss = Math.floor(s % 60).toString().padStart(2, '0')
-    const d  = Math.floor((s % 1) * 10)
-    return `${m}:${ss}.${d}`
-  }
-
   const skipLabel = useCallback((fine: boolean) => {
-    const amt = fine ? skip.fineAmount : skip.amount
-    const unit = fine ? skip.fineUnit : skip.unit
+    const amt  = fine ? skip.fineAmount : skip.amount
+    const unit = fine ? skip.fineUnit   : skip.unit
     return `${amt}${unit === 'beats' ? 'b' : 's'}`
   }, [skip])
 
@@ -136,7 +138,7 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
       </button>
 
       {/* Time display / editor */}
-      <div className="flex items-center gap-2 ml-1">
+      <div className="flex items-center gap-3 ml-1">
         {editing ? (
           <TimeInput
             value={playheadTime}
@@ -147,12 +149,24 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="font-mono text-sm text-zinc-200 hover:text-white px-1.5 py-0.5 rounded hover:bg-zinc-800 transition-colors tabular-nums"
+            className="flex flex-col items-start font-mono text-sm hover:bg-zinc-800 rounded px-1.5 py-0.5 transition-colors"
             title="Go to time (G)">
-            {fmtTime(playheadTime)}
+            <span className="text-zinc-200 tabular-nums leading-tight">{fmtHHMMSS(playheadTime)}</span>
+            {bpm > 0 && (
+              <span className="text-[10px] text-zinc-500 tabular-nums leading-tight">
+                {fmtBarsBeats(playheadTime, bpm, timeSigTop, timeSigBot, subdivTicks)}
+              </span>
+            )}
           </button>
         )}
-        <span className="text-zinc-600 text-xs font-mono tabular-nums">/ {fmtTime(duration)}</span>
+        <div className="flex flex-col items-start">
+          <span className="text-zinc-600 text-xs font-mono tabular-nums leading-tight">/ {fmtHHMMSS(duration)}</span>
+          {bpm > 0 && (
+            <span className="text-[10px] text-zinc-700 font-mono tabular-nums leading-tight">
+              / {fmtBarsBeats(duration, bpm, timeSigTop, timeSigBot, subdivTicks)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Add stem */}

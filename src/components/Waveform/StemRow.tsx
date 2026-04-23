@@ -18,18 +18,24 @@ type Props = {
 
 export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const [showSpec, setShowSpec] = useState(true)
-  const updateStem   = useTrackStore((s) => s.updateStem)
-  const removeStem   = useTrackStore((s) => s.removeStem)
-  const bpmOverride  = useTrackStore((s) => s.bpmOverride)
+  const updateStem       = useTrackStore((s) => s.updateStem)
+  const removeStem       = useTrackStore((s) => s.removeStem)
+  const bpmOverride      = useTrackStore((s) => s.bpmOverride)
+  const focusedStemId    = useTrackStore((s) => s.focusedStemId)
+  const setFocusedStemId = useTrackStore((s) => s.setFocusedStemId)
+  const isFocused = focusedStemId === stem.id
 
   const effectiveBpm = bpmOverride ?? stem.bpm ?? 0
 
   return (
-    <div className={`border-b border-zinc-800 last:border-0${!isFirst ? ' ws-secondary' : ''}`}>
+    <div
+      className={`border-b border-zinc-800 last:border-0${!isFirst ? ' ws-secondary' : ''}`}
+      onClick={() => setFocusedStemId(stem.id)}
+    >
       {/* Stem header — sticky so it stays visible when scrolling */}
       <div
-        className="sticky top-0 z-10 flex items-center gap-3 px-3 py-1.5 bg-zinc-900"
-        style={{ borderLeft: `3px solid ${stem.color}` }}
+        className={`sticky top-0 z-10 flex items-center gap-3 px-3 py-1.5 bg-zinc-900 transition-colors ${isFocused ? 'bg-zinc-800/80' : ''}`}
+        style={{ borderLeft: `${isFocused ? 4 : 3}px solid ${stem.color}${isFocused ? '' : '99'}` }}
       >
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-zinc-200 truncate">{stem.name}</p>
@@ -96,7 +102,7 @@ export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
       )}>
         <div className="relative">
           <Waveform stem={stem} audioBuffer={audioBuffer} wsRef={wsRef} isFirst={isFirst} />
-          {stem.duration > 0 && <CueMarkers duration={stem.duration} />}
+          {stem.duration > 0 && <CueMarkers duration={stem.duration} stemId={stem.id} />}
         </div>
       </ErrorBoundary>
 

@@ -1,28 +1,26 @@
 import { useRef, useCallback } from 'react'
 import { Trash2, MapPin } from 'lucide-react'
-import { useTrackStore } from '../../store/useTrackStore'
+import { useTrackStore, fmtHHMMSS } from '../../store/useTrackStore'
 
 type Props = {
   duration: number
+  stemName: string
+  stemColor: string
   onSeek: (t: number) => void
   onClearAll: () => void
   editingId: string | null
   setEditingId: (id: string | null) => void
 }
 
-function pad(n: number, len = 2) { return String(Math.floor(n)).padStart(len, '0') }
-function fmtTime(s: number) {
-  return `${pad(s / 60)}:${pad(s % 60)}.${Math.floor((s % 1) * 10)}`
-}
-
-export function MarkerPanel({ onSeek, onClearAll, setEditingId }: Props) {
-  const cueMarkers        = useTrackStore((s) => s.cueMarkers)
+export function MarkerPanel({ stemName, stemColor, onSeek, onClearAll, setEditingId }: Props) {
+  const focusedStemId     = useTrackStore((s) => s.focusedStemId)
+  const allMarkers        = useTrackStore((s) => s.cueMarkers)
+  const cueMarkers        = allMarkers.filter((m) => m.stemId === focusedStemId)
   const selectedMarkerId  = useTrackStore((s) => s.selectedMarkerId)
   const setSelectedMarkerId = useTrackStore((s) => s.setSelectedMarkerId)
   const updateCueMarker   = useTrackStore((s) => s.updateCueMarker)
   const removeCueMarker   = useTrackStore((s) => s.removeCueMarker)
 
-  // Refs for each label input so we can focus programmatically
   const labelRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
   const focusLabel = useCallback((id: string) => {
@@ -31,7 +29,7 @@ export function MarkerPanel({ onSeek, onClearAll, setEditingId }: Props) {
     setTimeout(() => labelRefs.current.get(id)?.focus(), 30)
   }, [setSelectedMarkerId, setEditingId])
 
-  // Expose focusLabel via custom event so App.tsx can call it for F2
+  // Expose for F2 shortcut
   if (typeof window !== 'undefined') {
     (window as Window & { __tlFocusLabel?: (id: string) => void }).__tlFocusLabel = focusLabel
   }
@@ -44,15 +42,16 @@ export function MarkerPanel({ onSeek, onClearAll, setEditingId }: Props) {
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800">
         <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <MapPin className="w-3 h-3" />
-          <span>Markers</span>
+          <span className="font-medium" style={{ color: stemColor }}>{stemName}</span>
+          <span className="text-zinc-600">markers</span>
           <span className="text-zinc-700">({cueMarkers.length})</span>
         </div>
         <button
           onClick={onClearAll}
           className="flex items-center gap-1 text-xs text-zinc-600 hover:text-red-400 transition-colors"
-          title="Clear all markers"
+          title="Clear markers for this stem (Ctrl+Shift+M)"
         >
-          <Trash2 className="w-3 h-3" /> Clear all
+          <Trash2 className="w-3 h-3" /> Clear
         </button>
       </div>
 
@@ -68,7 +67,7 @@ export function MarkerPanel({ onSeek, onClearAll, setEditingId }: Props) {
               }`}
               onClick={() => setSelectedMarkerId(isSelected ? null : marker.id)}
             >
-              {/* Colour badge with number */}
+              {/* Colour badge */}
               <div
                 className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold text-zinc-900 shrink-0"
                 style={{ backgroundColor: marker.color }}
@@ -77,16 +76,16 @@ export function MarkerPanel({ onSeek, onClearAll, setEditingId }: Props) {
                 {marker.number > 10 && <span className="text-[7px] leading-none ml-0.5">A</span>}
               </div>
 
-              {/* Timecode — click to seek */}
+              {/* Timecode */}
               <button
-                className="font-mono text-xs text-zinc-400 hover:text-indigo-400 transition-colors tabular-nums shrink-0 w-16 text-left"
+                className="font-mono text-xs text-zinc-400 hover:text-indigo-400 transition-colors tabular-nums shrink-0 w-20 text-left"
                 onClick={(e) => { e.stopPropagation(); onSeek(marker.time) }}
                 title="Seek to marker (Ctrl+number)"
               >
-                {fmtTime(marker.time)}
+                {fmtHHMMSS(marker.time)}
               </button>
 
-              {/* Label input — always visible, full width */}
+              {/* Label input */}
               <input
                 ref={(el) => { if (el) labelRefs.current.set(marker.id, el); else labelRefs.current.delete(marker.id) }}
                 type="text"
