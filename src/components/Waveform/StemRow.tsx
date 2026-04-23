@@ -14,9 +14,10 @@ type Props = {
   audioBuffer: AudioBuffer | null
   wsRef: React.MutableRefObject<WaveSurfer | null>
   isFirst: boolean
+  onSeek: (t: number) => void
 }
 
-export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
+export function StemRow({ stem, audioBuffer, wsRef, isFirst, onSeek }: Props) {
   const [showSpec, setShowSpec] = useState(true)
   const updateStem       = useTrackStore((s) => s.updateStem)
   const removeStem       = useTrackStore((s) => s.removeStem)
@@ -93,7 +94,7 @@ export function StemRow({ stem, audioBuffer, wsRef, isFirst }: Props) {
 
       {/* Beat grid (only on first stem, only when BPM + duration known) */}
       {isFirst && effectiveBpm > 0 && stem.duration > 0 && (
-        <BeatGrid bpm={effectiveBpm} duration={stem.duration} />
+        <BeatGrid bpm={effectiveBpm} duration={stem.duration} onSeek={onSeek} />
       )}
 
       {/* Waveform + marker overlay */}

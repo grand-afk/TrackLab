@@ -87,6 +87,12 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     instance.on('pause',  () => setPlaying(false))
     instance.on('finish', () => setPlaying(false))
 
+    // User clicked waveform — sync all stems via parent seekAll
+    instance.on('interaction', () => {
+      const t = instance.getCurrentTime()
+      window.dispatchEvent(new CustomEvent('tracklab:userseeked', { detail: t }))
+    })
+
     // Sync zoom/scroll to store so BeatGrid can follow
     instance.on('zoom', (pps: number) => {
       setCurrentPps(pps)

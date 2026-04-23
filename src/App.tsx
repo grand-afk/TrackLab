@@ -124,6 +124,14 @@ export default function App() {
     })
   }
 
+  // Cross-stem playhead sync: any waveform click triggers seekAll
+  useEffect(() => {
+    const handler = (e: Event) => seekAll((e as CustomEvent<number>).detail)
+    window.addEventListener('tracklab:userseeked', handler)
+    return () => window.removeEventListener('tracklab:userseeked', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [longestDuration])
+
   // Marker number keys: 1-0 and Alt+1-0
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -274,7 +282,8 @@ export default function App() {
               {stems.map((stem, i) => (
                 <StemRow key={stem.id} stem={stem}
                   audioBuffer={audioBuffers.get(stem.id) ?? null}
-                  wsRef={getWsRef(stem.id)} isFirst={i === 0} />
+                  wsRef={getWsRef(stem.id)} isFirst={i === 0}
+                  onSeek={seekAll} />
               ))}
             </ErrorBoundary>
             {focusedMarkers.length > 0 && (

@@ -242,8 +242,7 @@ export function fmtBarsBeats(seconds: number, bpm: number, timeSigTop: number, t
   const beat  = Math.floor((seconds % barDur) / noteDur) + 1
   const tick  = Math.floor((seconds % noteDur) / tickDur)
 
-  const tickChars = subdivTicks <= 4 ? 2 : 3
-  return `${String(bar).padStart(3,'0')}:${String(beat).padStart(2,'0')}:${String(tick).padStart(tickChars,'0')}`
+  return `${String(bar).padStart(3,'0')}:${String(beat).padStart(2,'0')}:${String(tick).padStart(2,'0')}`
 }
 
 // Helper — HH:MM:SS

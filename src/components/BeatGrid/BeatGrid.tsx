@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useTrackStore, type BeatGridGranularity } from '../../store/useTrackStore'
 
-type Props = { bpm: number; duration: number }
+type Props = { bpm: number; duration: number; onSeek?: (t: number) => void }
 
 // '1' granularity = 1 full bar; denominator note and numerator come from settings
 const DIVS: Record<BeatGridGranularity, number> = {
@@ -9,7 +9,7 @@ const DIVS: Record<BeatGridGranularity, number> = {
 }
 const GRANULARITIES: BeatGridGranularity[] = ['1', '1/2', '1/4', '1/8', '1/16']
 
-export function BeatGrid({ bpm, duration }: Props) {
+export function BeatGrid({ bpm, duration, onSeek }: Props) {
   const granularity    = useTrackStore((s) => s.granularity)
   const setGranularity = useTrackStore((s) => s.setGranularity)
   const bpmOverride    = useTrackStore((s) => s.bpmOverride)
@@ -93,8 +93,9 @@ export function BeatGrid({ bpm, duration }: Props) {
           return (
             <div
               key={t}
-              className="absolute top-0 flex flex-col items-center"
+              className={`absolute top-0 flex flex-col items-center${onSeek ? ' cursor-pointer' : ''}`}
               style={{ left }}
+              onClick={() => onSeek?.(t)}
             >
               {isBar ? (
                 <>
