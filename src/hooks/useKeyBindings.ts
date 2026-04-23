@@ -5,10 +5,11 @@ import { useTrackStore } from '../store/useTrackStore'
 type Handler = () => void
 type ActionMap = Partial<Record<string, Handler>>
 
-// tinykeys requires full modifier names for getModifierState() — normalize persisted lowercase values
+// tinykeys uses $mod (Ctrl on Win, Cmd on Mac) and title-cased modifier names.
+// Normalize old persisted lowercase values so bindings still fire after upgrades.
 function normShortcut(key: string): string {
   return key
-    .replace(/\bctrl\b/gi, 'Control')
+    .replace(/\bctrl\b/gi, '$mod')
     .replace(/\bshift\b/gi, 'Shift')
     .replace(/\balt\b/gi, 'Alt')
     .replace(/\bmeta\b/gi, 'Meta')

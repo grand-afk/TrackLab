@@ -60,7 +60,7 @@ export function Settings({ open, onClose }: Props) {
     const isModifier = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)
     if (isModifier) return  // wait for the actual key
     const parts: string[] = []
-    if (e.ctrlKey || e.metaKey) parts.push('Control')
+    if (e.ctrlKey || e.metaKey) parts.push('$mod')
     if (e.shiftKey) parts.push('Shift')
     if (e.altKey)   parts.push('Alt')
     const key = e.key === ' ' ? 'Space' : e.key

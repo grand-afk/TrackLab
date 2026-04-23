@@ -287,7 +287,7 @@ export default function App() {
         />
       )}
 
-      <input ref={addInputRef} type="file" accept="audio/*" multiple className="sr-only"
+      <input ref={addInputRef} type="file" accept=".mp3,.wav,.wave,.flac,.aac,.m4a,.ogg,.opus,.aiff,.aif,audio/*" multiple className="sr-only"
         onChange={(e) => { if (e.target.files) handleFiles(Array.from(e.target.files)); e.target.value = '' }}
       />
 

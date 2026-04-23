@@ -72,7 +72,7 @@ export function DropZone({ onFiles, disabled }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="audio/*"
+        accept=".mp3,.wav,.wave,.flac,.aac,.m4a,.ogg,.opus,.aiff,.aif,audio/*"
         multiple
         className="sr-only"
         onChange={handleChange}

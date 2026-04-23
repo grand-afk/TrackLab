@@ -111,9 +111,9 @@ const DEFAULT_SETTINGS: Settings = {
     'zoom-in':       '=',
     'zoom-out':      '-',
     'goto':          'g',
-    'settings':      'Control+,',
-    'export':        'Control+e',
-    'clear-markers': 'Control+Shift+m',
+    'settings':      '$mod+,',
+    'export':        '$mod+e',
+    'clear-markers': '$mod+Shift+m',
     'edit-label':    'F2',
   },
   skip: {

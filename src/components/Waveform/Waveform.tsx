@@ -31,8 +31,9 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const setCurrentPps = useTrackStore((s) => s.setCurrentPps)
   const setScrollStartTime = useTrackStore((s) => s.setScrollStartTime)
   const setContainerWidth = useTrackStore((s) => s.setContainerWidth)
-  const fitPpsRef      = useRef(0)
-  const scrollWrapperRef = useRef<HTMLElement | null>(null)
+  const fitPpsRef = useRef(0)
+  // Track the last pixel value we set programmatically so we can ignore the echo scroll event
+  const lastSetPxRef = useRef(-1)
 
   // Create WaveSurfer when container mounts
   useEffect(() => {
@@ -95,13 +96,22 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
       window.dispatchEvent(new CustomEvent('tracklab:userseeked', { detail: t }))
     })
 
+    // WaveSurfer scroll event fires for both user-initiated and auto-scroll during playback.
+    // Only first stem drives the store; ignore events that echo our own setScroll calls.
+    instance.on('scroll', (startTime: number, _endTime: number, scrollLeftPx: number) => {
+      if (!isFirst) return
+      if (Math.round(scrollLeftPx) === Math.round(lastSetPxRef.current)) return
+      lastSetPxRef.current = -1  // allow next auto-scroll to propagate
+      setScrollStartTime(startTime)
+    })
+
     // After zoom, read new scroll position so WaveScrollBar thumb stays in sync
     instance.on('zoom', (pps: number) => {
       setCurrentPps(pps)
       if (isFirst) {
         requestAnimationFrame(() => {
-          const w = scrollWrapperRef.current
-          if (w) setScrollStartTime(w.scrollLeft / pps)
+          const scroll = instance.getScroll()
+          setScrollStartTime(scroll / pps)
         })
       }
     })
@@ -110,7 +120,6 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0
       setContainerWidth(w)
-      // Recompute fit zoom if duration known
       if (fitPpsRef.current > 0) {
         const dur = wsRef.current?.getDuration() ?? 0
         if (dur > 0) fitPpsRef.current = w / dur
@@ -139,22 +148,18 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     ws.loadBlob(stem.file, peaks, audioBuffer.duration)
       .then(() => {
         updateStem(stem.id, { duration: audioBuffer.duration })
-        // Fit whole track on screen
         const w = container?.getBoundingClientRect().width ?? 800
         const pps = w / audioBuffer.duration
         fitPpsRef.current = pps
         ws.zoom(pps)
         setCurrentPps(pps)
         setContainerWidth(w)
-        // Capture scroll wrapper for programmatic scroll sync
-        // getWrapper() returns the inner .wrapper div; its parent is the .scroll container
-        scrollWrapperRef.current = (ws.getWrapper().parentElement as HTMLElement) ?? null
       })
       .catch((err: unknown) => console.error('WaveSurfer load error:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws, audioBuffer])
 
-  // Keyboard zoom (Ctrl + / -) still works via zoomH multiplier — first stem only
+  // Keyboard zoom (Ctrl + / -) via zoomH multiplier — first stem only
   useEffect(() => {
     if (!ws || !isFirst || fitPpsRef.current === 0) return
     try { ws.zoom(fitPpsRef.current * zoomH) } catch { /* not loaded */ }
@@ -166,12 +171,13 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     try { ws.zoom(currentPps) } catch { /* not loaded */ }
   }, [ws, currentPps, isFirst])
 
-  // All stems sync scroll from store — ref avoids stale-closure issues with ws state
+  // All stems sync scroll from store — use official setScroll() API
   useEffect(() => {
-    const w = scrollWrapperRef.current
-    if (!w || currentPps === 0) return
-    w.scrollLeft = scrollStartTime * currentPps
-  }, [scrollStartTime, currentPps])
+    if (!ws || currentPps === 0) return
+    const px = scrollStartTime * currentPps
+    lastSetPxRef.current = px
+    try { ws.setScroll(px) } catch { /* not loaded */ }
+  }, [ws, scrollStartTime, currentPps])
 
   return (
     <div className="relative ws-host">
