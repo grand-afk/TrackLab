@@ -20,6 +20,7 @@ type Props = {
 
 export function StemRow({ stem, stemIndex, audioBuffer, wsRef, isFirst, onSeek }: Props) {
   const [showSpec, setShowSpec] = useState(true)
+  const [showWave, setShowWave] = useState(true)
   const updateStem       = useTrackStore((s) => s.updateStem)
   const removeStem       = useTrackStore((s) => s.removeStem)
   const bpmOverride      = useTrackStore((s) => s.bpmOverride)
@@ -87,7 +88,15 @@ export function StemRow({ stem, stemIndex, audioBuffer, wsRef, isFirst, onSeek }
             <Headphones className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => setShowSpec((v) => !v)}
+            onClick={(e) => { e.stopPropagation(); setShowWave((v) => !v) }}
+            className={cn('px-2 py-0.5 rounded text-xs font-mono transition-colors',
+              showWave ? 'bg-indigo-600/30 text-indigo-300' : 'text-zinc-500 hover:text-zinc-300 bg-zinc-800'
+            )}
+          >
+            WAVE
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowSpec((v) => !v) }}
             className={cn('px-2 py-0.5 rounded text-xs font-mono transition-colors',
               showSpec ? 'bg-indigo-600/30 text-indigo-300' : 'text-zinc-500 hover:text-zinc-300 bg-zinc-800'
             )}
@@ -108,11 +117,11 @@ export function StemRow({ stem, stemIndex, audioBuffer, wsRef, isFirst, onSeek }
         <BeatGrid bpm={effectiveBpm} duration={stem.duration} onSeek={onSeek} />
       )}
 
-      {/* Waveform + marker overlay */}
+      {/* Waveform + marker overlay — keep mounted when hidden so WaveSurfer doesn't reinitialise */}
       <ErrorBoundary fallback={(e) => (
         <div className="px-3 py-2 text-xs text-red-400 font-mono">Waveform error: {e.message}</div>
       )}>
-        <div className="relative overflow-hidden">
+        <div className={showWave ? 'relative' : 'relative hidden'}>
           <Waveform stem={stem} audioBuffer={audioBuffer} wsRef={wsRef} isFirst={isFirst} />
           {stem.duration > 0 && <CueMarkers duration={stem.duration} stemId={stem.id} />}
         </div>

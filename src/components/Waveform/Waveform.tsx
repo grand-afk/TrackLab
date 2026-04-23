@@ -31,7 +31,8 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const setCurrentPps = useTrackStore((s) => s.setCurrentPps)
   const setScrollStartTime = useTrackStore((s) => s.setScrollStartTime)
   const setContainerWidth = useTrackStore((s) => s.setContainerWidth)
-  const fitPpsRef = useRef(0)
+  const fitPpsRef      = useRef(0)
+  const scrollWrapperRef = useRef<HTMLElement | null>(null)
 
   // Create WaveSurfer when container mounts
   useEffect(() => {
@@ -93,22 +94,18 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
       window.dispatchEvent(new CustomEvent('tracklab:userseeked', { detail: t }))
     })
 
-    // After zoom, read the new scroll position from the wrapper (single source of truth)
+    // After zoom, read new scroll position so WaveScrollBar thumb stays in sync
     instance.on('zoom', (pps: number) => {
       setCurrentPps(pps)
       if (isFirst) {
         requestAnimationFrame(() => {
-          const w = instance.getWrapper()
+          const w = scrollWrapperRef.current
           if (w) setScrollStartTime(w.scrollLeft / pps)
         })
       }
     })
 
-    // Hide native scrollbar — WaveScrollBar component takes over
-    requestAnimationFrame(() => {
-      const wrapper = instance.getWrapper()
-      if (wrapper) wrapper.classList.add('ws-hide-scroll')
-    })
+    // scrollbar hidden via CSS [part="scroll"] selector in index.css
 
     // Track container width via ResizeObserver
     const ro = new ResizeObserver((entries) => {
@@ -150,6 +147,8 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
         ws.zoom(pps)
         setCurrentPps(pps)
         setContainerWidth(w)
+        // Capture scroll wrapper once DOM is fully built
+        scrollWrapperRef.current = ws.getWrapper() ?? null
       })
       .catch((err: unknown) => console.error('WaveSurfer load error:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,12 +166,12 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     try { ws.zoom(currentPps) } catch { /* not loaded */ }
   }, [ws, currentPps, isFirst])
 
-  // All stems sync scroll position from store (WaveScrollBar drives scrollStartTime)
+  // All stems sync scroll from store — ref avoids stale-closure issues with ws state
   useEffect(() => {
-    if (!ws || currentPps === 0) return
-    const wrapper = ws.getWrapper()
-    if (wrapper) wrapper.scrollLeft = scrollStartTime * currentPps
-  }, [ws, scrollStartTime, currentPps])
+    const w = scrollWrapperRef.current
+    if (!w || currentPps === 0) return
+    w.scrollLeft = scrollStartTime * currentPps
+  }, [scrollStartTime, currentPps])
 
   return (
     <div className="relative">

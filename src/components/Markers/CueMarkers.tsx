@@ -25,8 +25,7 @@ export function CueMarkers({ duration, stemId }: Props) {
   const visibleEndTime = scrollStartTime + containerWidth / currentPps
 
   // Compute stagger rows for visible markers to avoid label overlap
-  // Each row is 14px apart; we assign a row index based on pixel proximity
-  const BADGE_PX = 22  // badge width + gap
+  const BADGE_PX = 60  // proximity threshold — wider than badge to reduce label overlap
   const visibleMarkers = cueMarkers.filter(
     (m) => m.time >= scrollStartTime - 2 && m.time <= visibleEndTime + 2
   )
@@ -54,7 +53,7 @@ export function CueMarkers({ duration, stemId }: Props) {
         const left = (marker.time - scrollStartTime) * currentPps
         const isSelected = marker.id === selectedMarkerId
         const labelRow = rowAssignment.get(marker.id) ?? 0
-        const labelTop = 28 + labelRow * 14  // px from top
+        const labelTop = 30 + labelRow * 16  // px from top; 16px row height reduces overlap
 
         return (
           <div
@@ -85,11 +84,11 @@ export function CueMarkers({ duration, stemId }: Props) {
               </div>
             </div>
 
-            {/* Label — staggered vertically */}
+            {/* Label — left-aligned from marker line, staggered vertically */}
             {marker.label && (
               <div
-                className="absolute -translate-x-1/2 text-[10px] font-mono whitespace-nowrap px-1 rounded pointer-events-none"
-                style={{ left: 1, top: labelTop, color: marker.color, backgroundColor: '#09090b99' }}
+                className="absolute text-[10px] font-mono whitespace-nowrap px-1 rounded pointer-events-none"
+                style={{ left: 4, top: labelTop, color: marker.color, backgroundColor: '#09090bcc' }}
               >
                 {marker.label}
               </div>
