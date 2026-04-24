@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import WaveSurfer from 'wavesurfer.js'
-import { Settings2, Download } from 'lucide-react'
+import { Settings2, Download, HelpCircle } from 'lucide-react'
 import { DropZone } from './components/DropZone/DropZone'
 import { StemRow } from './components/Waveform/StemRow'
 import { Transport } from './components/Transport/Transport'
@@ -13,6 +13,8 @@ import { useDecodeAudioFile, getAudioContext } from './hooks/useAudioEngine'
 import { useKeyBindings } from './hooks/useKeyBindings'
 import { analyseAudio } from './lib/essentia'
 import { exportMarkdown, triggerExport } from './lib/export'
+import { ShortcutBadge } from './components/Shortcuts/ShortcutBadge'
+import { WaveformHints } from './components/Shortcuts/WaveformHints'
 import type { Stem } from './store/useTrackStore'
 
 const MAX_STEMS = 6
@@ -42,6 +44,13 @@ export default function App() {
   const zoomH               = useTrackStore((s) => s.zoomH)
   const setZoomH            = useTrackStore((s) => s.setZoomH)
   const setScrollStartTime  = useTrackStore((s) => s.setScrollStartTime)
+  const toggleShortcutHints = useTrackStore((s) => s.toggleShortcutHints)
+  const showShortcutHints   = useTrackStore((s) => s.showShortcutHints)
+  const loopEnabled         = useTrackStore((s) => s.loopEnabled)
+  const loopStart           = useTrackStore((s) => s.loopStart)
+  const loopEnd             = useTrackStore((s) => s.loopEnd)
+  const playheadTime        = useTrackStore((s) => s.playheadTime)
+  const isPlaying           = useTrackStore((s) => s.isPlaying)
 
   const [markerPanelEditingId, setMarkerPanelEditingId] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -135,6 +144,15 @@ export default function App() {
     })
   }
 
+  // Loop playback: when playhead reaches loopEnd, seek back to loopStart
+  useEffect(() => {
+    if (!loopEnabled || !isPlaying || loopStart === null || loopEnd === null) return
+    if (playheadTime >= loopEnd) {
+      seekAll(loopStart)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playheadTime, loopEnabled, loopStart, loopEnd, isPlaying])
+
   // Cross-stem playhead sync: any waveform click triggers seekAll
   useEffect(() => {
     const handler = (e: Event) => seekAll((e as CustomEvent<number>).detail)
@@ -147,6 +165,13 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return
+
+      // ? key: toggle shortcut hints overlay
+      if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault()
+        useTrackStore.getState().toggleShortcutHints()
+        return
+      }
 
       // A–F: focus stem by letter
       if (!e.ctrlKey && !e.altKey && !e.shiftKey && e.key.length === 1) {
@@ -262,15 +287,23 @@ export default function App() {
         <div className="flex items-center gap-2">
           {decoding   && <span className="text-xs text-indigo-400/70">Decoding…</span>}
           {!decoding && analysing && <span className="text-xs text-zinc-500">Analysing…</span>}
+          <button
+            onClick={toggleShortcutHints}
+            className={`p-1.5 rounded transition-colors ${showShortcutHints ? 'bg-yellow-400/20 text-yellow-400' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300'}`}
+            title="Toggle shortcut hints (?)">
+            <HelpCircle className="w-4 h-4" />
+          </button>
           <button onClick={doExport}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+            className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
             title="Export (Ctrl+E)">
             <Download className="w-3.5 h-3.5" /> Export
+            <ShortcutBadge action="export" />
           </button>
           <button onClick={() => setSettingsOpen(true)}
-            className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors"
+            className="relative p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors"
             title="Settings (Ctrl+,)">
             <Settings2 className="w-4 h-4" />
+            <ShortcutBadge action="settings" />
           </button>
         </div>
       </header>
@@ -315,16 +348,19 @@ export default function App() {
           </div>
         ) : (
           <>
-            <ErrorBoundary fallback={(e) => (
-              <div className="p-6 text-sm text-red-400 font-mono">Render error: {e.message}</div>
-            )}>
-              {stems.map((stem, i) => (
-                <StemRow key={stem.id} stem={stem} stemIndex={i}
-                  audioBuffer={audioBuffers.get(stem.id) ?? null}
-                  wsRef={getWsRef(stem.id)} isFirst={i === 0}
-                  onSeek={seekAll} />
-              ))}
-            </ErrorBoundary>
+            <div className="relative">
+              <ErrorBoundary fallback={(e) => (
+                <div className="p-6 text-sm text-red-400 font-mono">Render error: {e.message}</div>
+              )}>
+                {stems.map((stem, i) => (
+                  <StemRow key={stem.id} stem={stem} stemIndex={i}
+                    audioBuffer={audioBuffers.get(stem.id) ?? null}
+                    wsRef={getWsRef(stem.id)} isFirst={i === 0}
+                    onSeek={seekAll} />
+                ))}
+              </ErrorBoundary>
+              <WaveformHints />
+            </div>
             {hasAnyMarkers && (
               <MarkerPanel
                 onSeek={seekAll}

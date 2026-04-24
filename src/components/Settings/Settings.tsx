@@ -3,6 +3,23 @@ import { X } from 'lucide-react'
 import { useTrackStore } from '../../store/useTrackStore'
 import type { SkipUnit } from '../../store/useTrackStore'
 
+const isMac = /Mac|iPod|iPhone|iPad/.test(typeof navigator !== 'undefined' ? navigator.platform : '')
+
+function fmtKey(key: string): string {
+  return key
+    .replace(/\$mod/g, isMac ? '⌘' : 'Ctrl')
+    .replace(/Shift/g, '⇧')
+    .replace(/Alt/g, isMac ? '⌥' : 'Alt')
+    .replace(/Control/g, 'Ctrl')
+    .replace('Space', '␣')
+    .replace('Escape', 'Esc')
+    .replace('ArrowLeft', '←')
+    .replace('ArrowRight', '→')
+    .replace('ArrowUp', '↑')
+    .replace('ArrowDown', '↓')
+    .replace(/\+/g, ' ')
+}
+
 const TIME_SIG_TOPS    = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 const TIME_SIG_BOTTOMS = [2, 4, 8, 16]
 const SUBDIV_OPTIONS   = [
@@ -186,7 +203,7 @@ export function Settings({ open, onClose }: Props) {
                 onClick={() => setEditing(action)}
                 onKeyDown={(e) => editing === action && capture(action, e)}
               >
-                {editing === action ? '…' : (shortcuts[action] ?? '—')}
+                {editing === action ? '…' : fmtKey(shortcuts[action] ?? '—')}
               </button>
             </div>
           ))}

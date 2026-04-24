@@ -1,6 +1,11 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Play, Pause, Square, SkipBack, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Play, Pause, Square, SkipBack, ChevronLeft, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { useTrackStore, fmtHHMMSS, fmtBarsBeats } from '../../store/useTrackStore'
+import { ShortcutBadge } from '../Shortcuts/ShortcutBadge'
+
+function cn(...classes: (string | false | undefined | null)[]): string {
+  return classes.filter(Boolean).join(' ')
+}
 
 type Props = {
   onPlay: () => void
@@ -71,14 +76,21 @@ function TimeInput({ value, duration, onCommit, onCancel }: {
 
 // ── Main component ────────────────────────────────────────────────────────
 export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, onAddFile }: Props) {
-  const isPlaying    = useTrackStore((s) => s.isPlaying)
-  const playheadTime = useTrackStore((s) => s.playheadTime)
-  const skip         = useTrackStore((s) => s.settings.skip)
-  const timeSigTop   = useTrackStore((s) => s.settings.timeSignatureTop)
-  const timeSigBot   = useTrackStore((s) => s.settings.timeSignatureBottom)
-  const subdivTicks  = useTrackStore((s) => s.settings.subdivisionTicks)
-  const stems        = useTrackStore((s) => s.stems)
-  const bpmOverride  = useTrackStore((s) => s.bpmOverride)
+  const isPlaying      = useTrackStore((s) => s.isPlaying)
+  const playheadTime   = useTrackStore((s) => s.playheadTime)
+  const skip           = useTrackStore((s) => s.settings.skip)
+  const timeSigTop     = useTrackStore((s) => s.settings.timeSignatureTop)
+  const timeSigBot     = useTrackStore((s) => s.settings.timeSignatureBottom)
+  const subdivTicks    = useTrackStore((s) => s.settings.subdivisionTicks)
+  const stems          = useTrackStore((s) => s.stems)
+  const bpmOverride    = useTrackStore((s) => s.bpmOverride)
+  const loopEnabled    = useTrackStore((s) => s.loopEnabled)
+  const loopStart      = useTrackStore((s) => s.loopStart)
+  const loopEnd        = useTrackStore((s) => s.loopEnd)
+  const toggleLoop     = useTrackStore((s) => s.toggleLoop)
+  const setLoopRegion  = useTrackStore((s) => s.setLoopRegion)
+  const cueMarkers     = useTrackStore((s) => s.cueMarkers)
+  const focusedStemId  = useTrackStore((s) => s.focusedStemId)
 
   const [editing, setEditing] = useState(false)
 
@@ -98,13 +110,18 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
     return `${amt}${unit === 'beats' ? 'b' : 's'}`
   }, [skip])
 
+  const focusedMarkers = cueMarkers
+    .filter((m) => m.stemId === focusedStemId)
+    .sort((a, b) => a.time - b.time)
+
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-b border-zinc-800 shrink-0 flex-wrap gap-y-1.5">
       {/* Skip to start */}
       <button onClick={() => onSeek(0)}
-        className="flex items-center justify-center w-7 h-7 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+        className="relative flex items-center justify-center w-7 h-7 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
         title="Skip to start (Home)">
         <SkipBack className="w-3.5 h-3.5" />
+        <ShortcutBadge action="skip-start" />
       </button>
 
       {/* Skip back */}
@@ -117,17 +134,46 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
 
       {/* Play / Pause */}
       <button onClick={isPlaying ? onPause : onPlay}
-        className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+        className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
         title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}>
         {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+        <ShortcutBadge action="play-pause" />
       </button>
 
       {/* Stop */}
       <button onClick={onStop}
-        className="flex items-center justify-center w-7 h-7 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+        className="relative flex items-center justify-center w-7 h-7 rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
         title="Stop (Esc)">
         <Square className="w-3.5 h-3.5" />
+        <ShortcutBadge action="stop" />
       </button>
+
+      {/* Loop toggle (only when a loop region is set) */}
+      {loopStart !== null && loopEnd !== null && (
+        <button
+          onClick={toggleLoop}
+          className={cn(
+            'flex items-center justify-center w-7 h-7 rounded transition-colors',
+            loopEnabled
+              ? 'text-indigo-400 bg-indigo-500/20'
+              : 'text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800'
+          )}
+          title={loopEnabled ? 'Loop: ON (click to disable)' : 'Loop: OFF (click to enable)'}
+        >
+          <Repeat className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      {/* Set Loop from first+last marker of focused stem */}
+      {focusedMarkers.length >= 2 && (
+        <button
+          onClick={() => setLoopRegion(focusedMarkers[0].time, focusedMarkers[focusedMarkers.length - 1].time)}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-700 transition-colors"
+          title="Set loop between first and last marker"
+        >
+          <Repeat className="w-3 h-3" /> Loop
+        </button>
+      )}
 
       {/* Skip forward */}
       <button onClick={() => onSkip(false, 1)}
@@ -149,7 +195,7 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="flex flex-col items-start font-mono text-sm hover:bg-zinc-800 rounded px-1.5 py-0.5 transition-colors"
+            className="relative flex flex-col items-start font-mono text-sm hover:bg-zinc-800 rounded px-1.5 py-0.5 transition-colors"
             title="Go to time (G)">
             <span className="text-zinc-200 tabular-nums leading-tight">{fmtHHMMSS(playheadTime)}</span>
             {bpm > 0 && (
@@ -157,6 +203,7 @@ export function Transport({ onPlay, onPause, onStop, onSeek, onSkip, duration, o
                 {fmtBarsBeats(playheadTime, bpm, timeSigTop, timeSigBot, subdivTicks)}
               </span>
             )}
+            <ShortcutBadge action="goto" className="bottom-0 right-0 top-auto" />
           </button>
         )}
         <div className="flex flex-col items-start">

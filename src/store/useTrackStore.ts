@@ -65,6 +65,10 @@ type TrackStore = {
   bpmOverride: number | null
   granularity: BeatGridGranularity
   settings: Settings
+  showShortcutHints: boolean
+  loopStart: number | null
+  loopEnd: number | null
+  loopEnabled: boolean
 
   addStem: (stem: Stem) => void
   removeStem: (id: string) => void
@@ -91,6 +95,10 @@ type TrackStore = {
   setGranularity: (g: BeatGridGranularity) => void
   updateSettings: (patch: Partial<Settings>) => void
   updateSkipSettings: (patch: Partial<SkipSettings>) => void
+  toggleShortcutHints: () => void
+  setLoopRegion: (start: number, end: number) => void
+  clearLoopRegion: () => void
+  toggleLoop: () => void
 }
 
 const STEM_COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4']
@@ -136,6 +144,8 @@ export const useTrackStore = create<TrackStore>()(
       currentPps: 0, scrollStartTime: 0, containerWidth: 0,
       zoomH: 1, bpmOverride: null, granularity: '1/4' as BeatGridGranularity,
       settings: DEFAULT_SETTINGS,
+      showShortcutHints: false,
+      loopStart: null, loopEnd: null, loopEnabled: false,
 
       addStem: (stem: Stem) =>
         set((s) => ({
@@ -194,6 +204,10 @@ export const useTrackStore = create<TrackStore>()(
         set((s) => ({ settings: { ...s.settings, ...patch } })),
       updateSkipSettings: (patch: Partial<SkipSettings>) =>
         set((s) => ({ settings: { ...s.settings, skip: { ...s.settings.skip, ...patch } } })),
+      toggleShortcutHints: () => set((s) => ({ showShortcutHints: !s.showShortcutHints })),
+      setLoopRegion: (start: number, end: number) => set({ loopStart: start, loopEnd: end, loopEnabled: true }),
+      clearLoopRegion: () => set({ loopStart: null, loopEnd: null, loopEnabled: false }),
+      toggleLoop: () => set((s) => ({ loopEnabled: !s.loopEnabled })),
     } satisfies TrackStore),
     {
       name: 'tracklab-store',

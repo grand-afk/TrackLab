@@ -19,6 +19,9 @@ export function BeatGrid({ bpm, duration, onSeek }: Props) {
   const containerW     = useTrackStore((s) => s.containerWidth)
   const timeSigTop     = useTrackStore((s) => s.settings.timeSignatureTop)
   const timeSigBot     = useTrackStore((s) => s.settings.timeSignatureBottom)
+  const loopStart      = useTrackStore((s) => s.loopStart)
+  const loopEnd        = useTrackStore((s) => s.loopEnd)
+  const loopEnabled    = useTrackStore((s) => s.loopEnabled)
 
   const effectiveBpm    = bpmOverride ?? bpm
   const BEATS_PER_BAR   = timeSigTop
@@ -87,6 +90,15 @@ export function BeatGrid({ bpm, duration, onSeek }: Props) {
 
       {/* Beat ruler — synced to WaveSurfer scroll+zoom via store */}
       <div className="relative h-9 overflow-hidden" style={{ minWidth: 0 }}>
+        {loopEnabled && loopStart !== null && loopEnd !== null && (
+          <div
+            className="absolute top-0 bottom-0 bg-indigo-500/15 border-l border-r border-indigo-500/40 pointer-events-none"
+            style={{
+              left: (loopStart - scrollStart) * currentPps,
+              width: (loopEnd - loopStart) * currentPps,
+            }}
+          />
+        )}
         {currentPps > 0 && marks.map(({ t, isBar, barNum, showLabel }) => {
           const left = (t - scrollStart) * currentPps
           if (left < -20 || left > containerW + 20) return null
