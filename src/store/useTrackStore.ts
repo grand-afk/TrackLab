@@ -204,6 +204,22 @@ export const useTrackStore = create<TrackStore>()(
         }
         return state
       },
+      // Deep-merge shortcuts so newly added default shortcuts appear in old persisted states
+      merge: (persistedState: unknown, currentState: TrackStore): TrackStore => {
+        const ps = persistedState as Partial<TrackStore>
+        return {
+          ...currentState,
+          ...ps,
+          settings: {
+            ...currentState.settings,
+            ...(ps.settings ?? {}),
+            shortcuts: {
+              ...currentState.settings.shortcuts,  // all defaults
+              ...(ps.settings?.shortcuts ?? {}),   // user overrides
+            },
+          },
+        }
+      },
       partialize: (s) => ({
         cueMarkers: s.cueMarkers,
         annotations: s.annotations,

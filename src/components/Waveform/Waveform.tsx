@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import WebAudioPlayer from 'wavesurfer.js/dist/webaudio.js'
 import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js'
 import ZoomPlugin from 'wavesurfer.js/dist/plugins/zoom.esm.js'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPlugin = any
 import { useTrackStore, type Stem } from '../../store/useTrackStore'
+import { getAudioContext } from '../../hooks/useAudioEngine'
 
 type Props = {
   stem: Stem
@@ -31,6 +34,7 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
   const setCurrentPps = useTrackStore((s) => s.setCurrentPps)
   const setScrollStartTime = useTrackStore((s) => s.setScrollStartTime)
   const setContainerWidth = useTrackStore((s) => s.setContainerWidth)
+  const anySolo = useTrackStore((s) => s.stems.some((st) => st.solo))
   const fitPpsRef = useRef(0)
   // Track the last pixel value we set programmatically so we can ignore the echo scroll event
   const lastSetPxRef = useRef(-1)
@@ -68,6 +72,9 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
 
     const instance = WaveSurfer.create({
       container,
+      // Share a single AudioContext across all stems so bufferNode.start() fires
+      // on the same clock — critical for iOS multi-stem sync.
+      media: new WebAudioPlayer(getAudioContext()) as unknown as HTMLMediaElement,
       waveColor: stem.color + 'aa',
       progressColor: stem.color,
       cursorColor: '#ffffff',
@@ -170,6 +177,13 @@ export function Waveform({ stem, audioBuffer, wsRef, isFirst }: Props) {
     if (isFirst || !ws || currentPps === 0) return
     try { ws.zoom(currentPps) } catch { /* not loaded */ }
   }, [ws, currentPps, isFirst])
+
+  // Apply mute / solo volume
+  useEffect(() => {
+    if (!ws) return
+    const effective = stem.muted ? 0 : (anySolo && !stem.solo ? 0 : 1)
+    try { ws.setVolume(effective) } catch { /* not loaded */ }
+  }, [ws, stem.muted, stem.solo, anySolo])
 
   // All stems sync scroll from store — use official setScroll() API
   useEffect(() => {

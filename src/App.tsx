@@ -9,7 +9,7 @@ import { Settings } from './components/Settings/Settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTrackStore, MARKER_COLORS, getSkipSeconds } from './store/useTrackStore'
 import { WaveScrollBar } from './components/WaveScrollBar'
-import { useDecodeAudioFile } from './hooks/useAudioEngine'
+import { useDecodeAudioFile, getAudioContext } from './hooks/useAudioEngine'
 import { useKeyBindings } from './hooks/useKeyBindings'
 import { analyseAudio } from './lib/essentia'
 import { exportMarkdown, triggerExport } from './lib/export'
@@ -93,7 +93,12 @@ export default function App() {
     wsRefs.current.forEach((r) => r.current?.seekTo(seconds / longestDuration))
     setPlayheadTime(seconds)
   }
-  function playAll()  { wsRefs.current.forEach((r) => r.current?.play());  setPlaying(true)  }
+  function playAll()  {
+    // Resume the shared AudioContext on this user gesture (required on iOS)
+    getAudioContext().resume().catch(() => {})
+    wsRefs.current.forEach((r) => r.current?.play())
+    setPlaying(true)
+  }
   function pauseAll() { wsRefs.current.forEach((r) => r.current?.pause()); setPlaying(false) }
   function stopAll()  {
     wsRefs.current.forEach((r) => r.current?.stop())
