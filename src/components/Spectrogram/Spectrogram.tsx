@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTrackStore } from '../../store/useTrackStore'
 
 type Props = {
   audioBuffer: AudioBuffer
@@ -77,8 +78,11 @@ async function buildSpectrogram(
 }
 
 export function Spectrogram({ audioBuffer, height = 160 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef      = useRef<HTMLCanvasElement>(null)
   const [building, setBuilding] = useState(false)
+  const currentPps     = useTrackStore((s) => s.currentPps)
+  const scrollStartTime = useTrackStore((s) => s.scrollStartTime)
+  const duration       = audioBuffer.duration
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -110,8 +114,13 @@ export function Spectrogram({ audioBuffer, height = 160 }: Props) {
     })
   }, [audioBuffer])
 
+  // Canvas renders 500 columns covering the full duration. CSS stretches it to
+  // match the waveform width (duration * currentPps px) and translateX scrolls it.
+  const totalWidth  = currentPps > 0 ? duration * currentPps : 0
+  const offsetX     = scrollStartTime * currentPps
+
   return (
-    <div className="relative" style={{ height }}>
+    <div className="relative overflow-hidden" style={{ height }}>
       {building && (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">
           Building spectrogram…
@@ -119,7 +128,13 @@ export function Spectrogram({ audioBuffer, height = 160 }: Props) {
       )}
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: '100%', imageRendering: 'pixelated' }}
+        style={{
+          position: 'absolute',
+          left: 0, top: 0, height: '100%',
+          width: totalWidth > 0 ? totalWidth : '100%',
+          imageRendering: 'pixelated',
+          transform: totalWidth > 0 ? `translateX(${-offsetX}px)` : 'none',
+        }}
         className="block rounded"
       />
     </div>
